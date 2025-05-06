@@ -1,0 +1,356 @@
+{% extends "base.html" %}
+
+{% block title %}{{ video.title }} - 弹幕分析{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('main.index') }}">首页</a></li>
+            <li class="breadcrumb-item">
+                <a href="{{ url_for('main.danmu_list_view') }}">弹幕数据</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">{{ video.title }}</li>
+        </ol>
+    </nav>
+    
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h1 class="mb-2">{{ video.title }}</h1>
+            <p class="text-muted">UP主: {{ video.author }} | 播放量: {{ video.play_count|format_number }} | 弹幕数: {{ danmu_count|format_number }}</p>
+        </div>
+        <div class="col-md-4 text-md-end">
+            <a href="https://www.bilibili.com/video/{{ video.bvid }}" target="_blank" class="btn btn-outline-primary">
+                <i class="fas fa-play-circle me-1"></i>在B站观看
+            </a>
+        </div>
+    </div>
+    
+    <div class="row g-4">
+        <!-- 弹幕时间分布 -->
+        <div class="col-md-12">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">弹幕时间分布</h5>
+                </div>
+                <div class="card-body">
+                    <div id="timeDistributionChart" style="height: 300px;"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 弹幕颜色分布 -->
+        <div class="col-md-6" hidden>
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">弹幕颜色分布</h5>
+                </div>
+                <div class="card-body">
+                    <div id="colorDistributionChart" style="height: 300px;"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 弹幕模式分布 -->
+        <div class="col-md-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">弹幕模式分布</h5>
+                </div>
+                <div class="card-body">
+                    <div id="modeDistributionChart" style="height: 300px;"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 弹幕词云 -->
+        <div class="col-md-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">弹幕词云</h5>
+                </div>
+                <div class="card-body">
+                    <div id="wordCloudChart" style="height: 300px;"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 弹幕列表 -->
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">弹幕列表</h5>
+                    <span class="badge bg-light text-dark">共 {{ danmu_count }} 条</span>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>内容</th>
+                                    <th>出现时间</th>
+                                    <th>模式</th>
+                                    <th>颜色</th>
+                                    <th>发送时间</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for danmu in danmu_list[:100] %}
+                                <tr>
+                                    <td>{{ danmu.content }}</td>
+                                    <td>{{ "%d:%02d"|format(danmu.appear_time//60, danmu.appear_time%60) }}</td>
+                                    <td>{{ danmu.mode }}</td>
+                                    <td>
+                                        <span class="color-box" style="background-color: #{{ '%06x' % danmu.color }}"></span>
+                                        #{{ '%06x' % danmu.color }}
+                                    </td>
+                                    <td>{{ danmu.created_time.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                                </tr>
+                                {% endfor %}
+                                {% if danmu_count > 100 %}
+                                <tr>
+                                    <td colspan="5" class="text-center py-3">
+                                        <div class="alert alert-info mb-0">
+                                            为了页面加载速度，只显示前100条弹幕
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.6.0/echarts.min.js"></script>
+<script src="https://cdn.bootcdn.net/ajax/libs/echarts-wordcloud/2.1.0/echarts-wordcloud.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // 弹幕时间分布图
+        const timeDistributionChart = echarts.init(document.getElementById('timeDistributionChart'));
+        const timeData = [
+            {% for segment, count in time_distribution %}
+            {
+                time: {{ segment * 10 }},
+                count: {{ count }}
+            },
+            {% endfor %}
+        ];
+        
+        timeDistributionChart.setOption({
+            tooltip: {
+                trigger: 'axis',
+                formatter: function(params) {
+                    const data = params[0].data;
+                    const minutes = Math.floor(data.time / 60);
+                    const seconds = data.time % 60;
+                    return `${minutes}:${seconds.toString().padStart(2, '0')} - ${minutes}:${(seconds+10).toString().padStart(2, '0')}<br/>弹幕数: ${data.count}`;
+                }
+            },
+            xAxis: {
+                type: 'category',
+                data: timeData.map(item => {
+                    const minutes = Math.floor(item.time / 60);
+                    const seconds = item.time % 60;
+                    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                }),
+                axisLabel: {
+                    interval: Math.ceil(timeData.length / 10),
+                    rotate: 45
+                }
+            },
+            yAxis: {
+                type: 'value',
+                name: '弹幕数'
+            },
+            series: [{
+                data: timeData.map(item => item.count),
+                type: 'bar',
+                itemStyle: {
+                    color: '#4e73df'
+                }
+            }],
+            grid: {
+                left: '3%',
+                right: '4%',
+                bottom: '15%',
+                top: '10%',
+                containLabel: true
+            }
+        });
+        
+        // 弹幕颜色分布图
+        const colorDistributionChart = echarts.init(document.getElementById('colorDistributionChart'));
+        const colorData = [
+            {% for color, count in color_distribution %}
+            {
+                name: '#{{ '%06x' % color }}',
+                value: {{ count }}
+            },
+            {% endfor %}
+        ];
+        
+        colorDistributionChart.setOption({
+            tooltip: {
+                trigger: 'item',
+                formatter: '{b}: {c} ({d}%)'
+            },
+            series: [{
+                type: 'pie',
+                radius: '70%',
+                center: ['50%', '50%'],
+                data: colorData,
+                itemStyle: {
+                    color: function(params) {
+                        return params.data.name;
+                    }
+                },
+                label: {
+                    formatter: '{b}: {d}%'
+                },
+                emphasis: {
+                    itemStyle: {
+                        shadowBlur: 10,
+                        shadowOffsetX: 0,
+                        shadowColor: 'rgba(0, 0, 0, 0.5)'
+                    }
+                }
+            }]
+        });
+        
+        // 弹幕模式分布图
+        const modeDistributionChart = echarts.init(document.getElementById('modeDistributionChart'));
+        const modeMap = {
+            1: '滚动弹幕',
+            4: '底部弹幕',
+            5: '顶部弹幕',
+            6: '逆向弹幕',
+            7: '高级弹幕',
+            8: '代码弹幕'
+        };
+        const modeData = [
+            {% for mode, count in mode_distribution %}
+            {
+                name: modeMap[{{ mode }}] || '未知模式({{ mode }})',
+                value: {{ count }}
+            },
+            {% endfor %}
+        ];
+        
+        modeDistributionChart.setOption({
+            tooltip: {
+                trigger: 'item',
+                formatter: '{b}: {c} ({d}%)'
+            },
+            series: [{
+                type: 'pie',
+                radius: '70%',
+                center: ['50%', '50%'],
+                data: modeData,
+                label: {
+                    formatter: '{b}: {d}%'
+                },
+                emphasis: {
+                    itemStyle: {
+                        shadowBlur: 10,
+                        shadowOffsetX: 0,
+                        shadowColor: 'rgba(0, 0, 0, 0.5)'
+                    }
+                }
+            }]
+        });
+        
+        // 弹幕词云图
+        const wordCloudChart = echarts.init(document.getElementById('wordCloudChart'));
+        
+        // 获取弹幕内容并统计词频
+        const danmuContents = [
+            {% for danmu in danmu_list %}
+            "{{ danmu.content }}",
+            {% endfor %}
+        ];
+        
+        // 简单的分词和统计
+        const wordFreq = {};
+        danmuContents.forEach(content => {
+            // 简单分词，按空格和标点符号分割
+            const words = content.split(/[\s,.!?，。！？、]/);
+            words.forEach(word => {
+                if (word && word.length > 1) {  // 忽略空字符串和单字符
+                    wordFreq[word] = (wordFreq[word] || 0) + 1;
+                }
+            });
+        });
+        
+        // 转换为词云数据格式
+        const wordCloudData = Object.keys(wordFreq).map(word => ({
+            name: word,
+            value: wordFreq[word]
+        })).sort((a, b) => b.value - a.value).slice(0, 100);  // 取前100个词
+        
+        wordCloudChart.setOption({
+            tooltip: {
+                show: true
+            },
+            series: [{
+                type: 'wordCloud',
+                shape: 'circle',
+                left: 'center',
+                top: 'center',
+                width: '90%',
+                height: '90%',
+                right: null,
+                bottom: null,
+                sizeRange: [12, 60],
+                rotationRange: [-90, 90],
+                rotationStep: 45,
+                gridSize: 8,
+                drawOutOfBound: false,
+                textStyle: {
+                    fontFamily: 'sans-serif',
+                    fontWeight: 'bold',
+                    color: function () {
+                        return 'rgb(' + [
+                            Math.round(Math.random() * 160),
+                            Math.round(Math.random() * 160),
+                            Math.round(Math.random() * 160)
+                        ].join(',') + ')';
+                    }
+                },
+                emphasis: {
+                    focus: 'self',
+                    textStyle: {
+                        shadowBlur: 10,
+                        shadowColor: '#333'
+                    }
+                },
+                data: wordCloudData
+            }]
+        });
+        
+        // 响应式调整
+        window.addEventListener('resize', function() {
+            timeDistributionChart.resize();
+            colorDistributionChart.resize();
+            modeDistributionChart.resize();
+            wordCloudChart.resize();
+        });
+    });
+</script>
+
+<style>
+.color-box {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    margin-right: 5px;
+    border-radius: 3px;
+    vertical-align: middle;
+}
+</style>
+{% endblock %} 

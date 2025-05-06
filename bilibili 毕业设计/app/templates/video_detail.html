@@ -1,0 +1,127 @@
+<div class="card-footer">
+    <button class="btn btn-primary crawl-danmu-btn" data-bvid="{{ video.bvid }}">
+        <i class="fas fa-download me-1"></i>爬取最新弹幕
+    </button>
+    <span class="crawl-status ms-2"></span>
+</div>
+
+<!-- 弹幕爬取进度条 -->
+<div id="danmuCrawlProgress" style="display: none;" class="mt-3">
+    <div class="progress mb-2" style="height: 20px;">
+        <div id="danmuProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: 0%"></div>
+    </div>
+    <div class="d-flex justify-content-between text-muted">
+        <span id="danmuCurrentCount">已爬取: 0 条</span>
+        <span id="danmuTotalCount">总计: 0 条</span>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 弹幕爬取按钮点击事件
+    const crawlDanmuBtns = document.querySelectorAll('.crawl-danmu-btn');
+    
+    crawlDanmuBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            const bvid = this.getAttribute('data-bvid');
+            const statusSpan = this.nextElementSibling;
+            const originalText = this.innerHTML;
+            
+            // 禁用按钮并显示加载状态
+            this.disabled = true;
+            this.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>爬取中...';
+            statusSpan.textContent = '';
+            
+            // 发送爬取请求
+            fetch('/api/crawl/danmu', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ bvid: bvid })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    statusSpan.textContent = '✓ ' + data.message;
+                    statusSpan.className = 'crawl-status ms-2 text-success';
+                } else {
+                    statusSpan.textContent = '✗ ' + data.message;
+                    statusSpan.className = 'crawl-status ms-2 text-danger';
+                }
+                
+                // 恢复按钮状态
+                this.disabled = false;
+                this.innerHTML = originalText;
+            })
+            .catch(error => {
+                console.error('爬取弹幕出错:', error);
+                statusSpan.textContent = '✗ 请求失败';
+                statusSpan.className = 'crawl-status ms-2 text-danger';
+                
+                // 恢复按钮状态
+                this.disabled = false;
+                this.innerHTML = originalText;
+            });
+        });
+    });
+
+    // Socket.IO 连接
+    const socket = io();
+    
+    // 监听弹幕爬取进度事件
+    socket.on('danmu_progress', function(data) {
+        const progressDiv = document.getElementById('danmuCrawlProgress');
+        const progressBar = document.getElementById('danmuProgressBar');
+        const currentCount = document.getElementById('danmuCurrentCount');
+        const totalCount = document.getElementById('danmuTotalCount');
+        
+        // 显示进度条
+        progressDiv.style.display = 'block';
+        
+        // 更新进度
+        progressBar.style.width = data.percent + '%';
+        progressBar.textContent = data.percent + '%';
+        
+        // 更新计数
+        currentCount.textContent = '已爬取: ' + data.current + ' 条';
+        totalCount.textContent = '总计: ' + data.total + ' 条';
+    });
+    
+    // 监听弹幕爬取完成事件
+    socket.on('danmu_complete', function(data) {
+        const progressDiv = document.getElementById('danmuCrawlProgress');
+        const progressBar = document.getElementById('danmuProgressBar');
+        
+        // 更新进度为100%
+        progressBar.style.width = '100%';
+        progressBar.textContent = '100%';
+        progressBar.classList.remove('progress-bar-animated');
+        
+        // 显示完成消息
+        const statusSpan = document.querySelector('.crawl-status');
+        if (statusSpan) {
+            statusSpan.textContent = '✓ 爬取完成，共 ' + data.count + ' 条弹幕';
+            statusSpan.className = 'crawl-status ms-2 text-success';
+        }
+        
+        // 3秒后隐藏进度条
+        setTimeout(function() {
+            progressDiv.style.display = 'none';
+        }, 3000);
+    });
+    
+    // 监听弹幕爬取错误事件
+    socket.on('danmu_error', function(data) {
+        const statusSpan = document.querySelector('.crawl-status');
+        if (statusSpan) {
+            statusSpan.textContent = '✗ 爬取失败: ' + data.message;
+            statusSpan.className = 'crawl-status ms-2 text-danger';
+        }
+        
+        // 隐藏进度条
+        const progressDiv = document.getElementById('danmuCrawlProgress');
+        progressDiv.style.display = 'none';
+    });
+});
+</script> 

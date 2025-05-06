@@ -1,0 +1,168 @@
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card" id="crawlProgressCard" style="display: none;">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">爬取进度</h5>
+                <span class="badge bg-info" id="statusBadge">等待开始</span>
+            </div>
+            <div class="card-body">
+                <!-- 进度条 -->
+                <div class="progress mb-3" style="height: 25px;">
+                    <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                         role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                        0%
+                    </div>
+                </div>
+                
+                <!-- 当前任务信息 -->
+                <div class="mb-3">
+                    <p><strong>当前任务:</strong> <span id="currentTask">暂无任务</span></p>
+                    <p><strong>进度:</strong> <span id="progress">0/0</span></p>
+                </div>
+                
+                <!-- 日志区域 -->
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between">
+                        <span>爬取日志</span>
+                        <button class="btn btn-sm btn-outline-secondary" id="clearLogBtn">清空日志</button>
+                    </div>
+                    <div class="card-body">
+                        <div id="crawlLogs" style="height: 300px; overflow-y: auto; background: #f8f9fa; padding: 10px; border-radius: 5px; font-family: monospace;">
+                            <div class="text-muted">[系统] 等待爬取任务开始...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+{{ super() }}
+<script>
+    $(document).ready(function() {
+        // 连接Socket.IO
+        const socket = io();
+        let taskInProgress = false;
+        
+        // 更新任务状态
+        function updateStatus(status, className) {
+            $('#statusBadge').removeClass('bg-info bg-success bg-danger bg-warning').addClass(className);
+            $('#statusBadge').text(status);
+        }
+        
+        // 更新进度条
+        function updateProgressBar(percentage) {
+            $('#progressBar').css('width', percentage + '%');
+            $('#progressBar').attr('aria-valuenow', percentage);
+            $('#progressBar').text(percentage + '%');
+            
+            // 根据百分比更改颜色
+            $('#progressBar').removeClass('bg-danger bg-warning bg-info bg-success');
+            if (percentage < 25) {
+                $('#progressBar').addClass('bg-danger');
+            } else if (percentage < 50) {
+                $('#progressBar').addClass('bg-warning');
+            } else if (percentage < 75) {
+                $('#progressBar').addClass('bg-info');
+            } else {
+                $('#progressBar').addClass('bg-success');
+            }
+        }
+        
+        // 添加日志条目
+        function addLogEntry(message, type = 'info') {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString();
+            
+            let colorClass = 'text-info';
+            if (type === 'error') colorClass = 'text-danger';
+            else if (type === 'success') colorClass = 'text-success';
+            else if (type === 'warning') colorClass = 'text-warning';
+            
+            const logEntry = `<div class="${colorClass}">[${timeString}] ${message}</div>`;
+            
+            $('#crawlLogs').append(logEntry);
+            
+            // 自动滚动到底部
+            const logsContainer = document.getElementById('crawlLogs');
+            logsContainer.scrollTop = logsContainer.scrollHeight;
+        }
+        
+        // Socket.IO事件处理
+        socket.on('connect', function() {
+            addLogEntry('已连接到服务器', 'success');
+        });
+        
+        socket.on('disconnect', function() {
+            addLogEntry('与服务器的连接已断开', 'error');
+            updateStatus('已断开', 'bg-danger');
+        });
+        
+        socket.on('crawl_task_start', function(data) {
+            taskInProgress = true;
+            $('#crawlProgressCard').show();
+            
+            updateStatus('进行中', 'bg-warning');
+            updateProgressBar(0);
+            
+            $('#currentTask').text(`正在爬取: ${data.type}...`);
+            $('#progress').text(`0/${data.limit || 'N/A'}`);
+            
+            addLogEntry(`开始爬取: ${data.type}`, 'info');
+        });
+        
+        socket.on('crawl_progress', function(data) {
+            $('#crawlProgressCard').show();
+            updateProgressBar(data.percentage);
+            $('#progress').text(`${data.current}/${data.total}`);
+            $('#currentTask').text(`${data.message || '处理中...'}`);
+            
+            let logMessage = `[${data.task_type}] ${data.current}/${data.total} (${data.percentage}%): ${data.message || ''}`;
+            addLogEntry(logMessage, 'info');
+        });
+        
+        socket.on('crawl_task_complete', function(data) {
+            taskInProgress = false;
+            
+            updateStatus('已完成', 'bg-success');
+            updateProgressBar(100);
+            
+            $('#currentTask').text(`已完成: ${data.message}`);
+            
+            addLogEntry(`任务完成: ${data.message}`, 'success');
+        });
+        
+        socket.on('crawl_task_error', function(data) {
+            taskInProgress = false;
+            
+            updateStatus('出错', 'bg-danger');
+            
+            $('#currentTask').text(`出错: ${data.message}`);
+            
+            addLogEntry(`任务出错: ${data.message}`, 'error');
+        });
+        
+        // 清空日志按钮功能
+        $('#clearLogBtn').click(function() {
+            $('#crawlLogs').html('');
+            addLogEntry('日志已清空', 'info');
+        });
+        
+        // 修改现有的爬取请求发送函数，在发送请求前显示进度区域
+        $('#crawlForm').on('submit', function(e) {
+            e.preventDefault();
+            
+            // 显示进度区域
+            $('#crawlProgressCard').show();
+            updateStatus('准备中', 'bg-info');
+            updateProgressBar(0);
+            $('#currentTask').text('正在准备爬取任务...');
+            addLogEntry('正在发送爬取请求...', 'info');
+            
+            // 发送请求的代码保持不变...
+            // ...
+        });
+    });
+</script>
+{% endblock %} 

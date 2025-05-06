@@ -1,0 +1,1 @@
+from app.controllers.main import main_bp

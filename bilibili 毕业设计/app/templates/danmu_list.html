@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}弹幕数据列表{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <h1 class="mb-4">弹幕数据列表</h1>
+    
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">已爬取的视频弹幕</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>视频标题</th>
+                            <th>UP主</th>
+                            <th>弹幕数量</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for video, danmu_count in videos %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('main.danmu_detail', bvid=video.bvid) }}" class="text-decoration-none">
+                                    {{ video.title }}
+                                </a>
+                            </td>
+                            <td>{{ video.author }}</td>
+                            <td>{{ danmu_count }}</td>
+                            <td>
+                                <a href="{{ url_for('main.danmu_detail', bvid=video.bvid) }}" class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-chart-bar me-1"></i>查看分析
+                                </a>
+                                <a href="https://www.bilibili.com/video/{{ video.bvid }}" target="_blank" class="btn btn-sm btn-outline-secondary">
+                                    <i class="fas fa-external-link-alt me-1"></i>B站链接
+                                </a>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="4" class="text-center py-4">
+                                <div class="alert alert-info mb-0">
+                                    <i class="fas fa-info-circle me-2"></i>暂无弹幕数据，请先爬取视频弹幕
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer bg-light">
+            <div class="d-flex justify-content-between align-items-center">
+                <span>共 {{ videos|length }} 个视频</span>
+                <a href="{{ url_for('main.index') }}" class="btn btn-primary">
+                    <i class="fas fa-spider me-2"></i>爬取更多弹幕
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

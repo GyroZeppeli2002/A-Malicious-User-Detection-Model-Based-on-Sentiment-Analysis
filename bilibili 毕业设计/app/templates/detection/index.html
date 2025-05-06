@@ -1,0 +1,884 @@
+{% extends "base.html" %}
+
+{% block title %}恶意用户检测{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <h1 class="mb-4">恶意用户检测</h1>
+    
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">检测设置</h5>
+                </div>
+                <div class="card-body">
+                    <form id="detectionForm">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label for="videoSelect" class="form-label">选择视频</label>
+                                <select class="form-select" id="videoSelect" name="video_id">
+                                    <option value="">所有视频</option>
+                                    {% for video, danmu_count in videos %}
+                                    <option value="{{ video.id }}">{{ video.title }} ({{ danmu_count }}条弹幕)</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="thresholdRange" class="form-label">恶意阈值: <span id="thresholdValue">0.7</span></label>
+                                <input type="range" class="form-range" id="thresholdRange" name="threshold" min="0.2" max="0.9" step="0.05" value="0.7">
+                                <div class="form-text">阈值越高，检测越严格</div>
+                            </div>
+                            <div class="col-md-2 d-flex align-items-end">
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="fas fa-search me-1"></i>开始检测
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 检测结果 -->
+    <div id="detectionResults" style="display: none;">
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">检测结果</h5>
+                <span class="badge bg-light text-dark" id="resultCount">0个恶意用户</span>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>用户标识</th>
+                                <th>恶意分数</th>
+                                <th>弹幕数量</th>
+                                <th>活跃视频</th>
+                                <th>最近活动</th>
+                                
+                            </tr>
+                        </thead>
+                        <tbody id="resultTable">
+                            <!-- 结果将通过JavaScript动态添加 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 详细分析 -->
+        <div class="row g-4">
+            <div class="col-md-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">恶意类型分布</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="maliciousTypeChart" style="height: 300px;"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">恶意用户活跃度</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="userActivityChart" style="height: 300px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 在检测结果部分添加统计信息 -->
+        <div class="row g-4 mb-4">
+            <div class="col-md-12">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">检测统计</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3 text-center">
+                                <div class="display-4" id="totalUsers">0</div>
+                                <div class="text-muted">总用户数</div>
+                            </div>
+                            <div class="col-md-3 text-center">
+                                <div class="display-4" id="maliciousCount">0</div>
+                                <div class="text-muted">恶意用户数</div>
+                            </div>
+                            <div class="col-md-3 text-center">
+                                <div class="display-4" id="negativeEmotionCount">0</div>
+                                <div class="text-muted">负面情绪用户</div>
+                            </div>
+                            <div class="col-md-3 text-center">
+                                <div class="display-4" id="unsupportCount">0</div>
+                                <div class="text-muted">不支持行为用户</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 加载中提示 -->
+    <div id="loadingIndicator" style="display: none;">
+        <div class="d-flex justify-content-center my-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <span class="ms-3">正在检测中，请稍候...</span>
+        </div>
+    </div>
+    
+    <!-- 无结果提示 -->
+    <div id="noResultsAlert" style="display: none;">
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle me-2"></i>未检测到恶意用户
+        </div>
+    </div>
+    
+    <!-- 错误提示 -->
+    <div id="errorAlert" style="display: none;" hidden>
+        <div class="alert alert-danger">
+            <i class="fas fa-exclamation-circle me-2"></i>
+            <span id="errorMessage">检测过程中发生错误</span>
+        </div>
+    </div>
+</div>
+
+<!-- 用户详情模态框 -->
+<div class="modal fade" id="userDetailModal" tabindex="-1" aria-labelledby="userDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="userDetailModalLabel">用户详情</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-4">
+                    <h6>恶意评分详情</h6>
+                    <div class="progress mb-3" style="height: 25px;">
+                        <div id="totalScoreBar" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-md-4">
+                            <div class="progress mb-2" style="height: 20px;">
+                                <div id="sensitiveScoreBar" class="progress-bar bg-danger" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">敏感词</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="progress mb-2" style="height: 20px;">
+                                <div id="spamScoreBar" class="progress-bar bg-warning" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">垃圾信息</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="progress mb-2" style="height: 20px;">
+                                <div id="duplicateScoreBar" class="progress-bar bg-info" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">重复内容</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="progress mb-2" style="height: 20px;">
+                                <div id="burstScoreBar" class="progress-bar bg-primary" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">爆发式发送</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="progress mb-2" style="height: 20px;">
+                                <div id="crossSpamScoreBar" class="progress-bar bg-secondary" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">跨视频垃圾</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="progress mb-2" style="height: 20px;">
+                                <div id="negativeEmotionScoreBar" class="progress-bar bg-danger" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">负面情绪</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="progress mb-2" style="height: 20px;">
+                                <div id="unsupportScoreBar" class="progress-bar bg-warning" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">不支持行为</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row g-4">
+                    <div class="col-md-6">
+                        <div class="card mb-3">
+                            <div class="card-header">检测到的敏感词</div>
+                            <div class="card-body">
+                                <div id="sensitiveWordsList">
+                                    <span class="badge bg-light text-dark">暂无数据</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card mb-3">
+                            <div class="card-header">检测到的垃圾信息</div>
+                            <div class="card-body">
+                                <div id="spamMessagesList">
+                                    <span class="badge bg-light text-dark">暂无数据</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card mb-3">
+                    <div class="card-header">用户活动记录</div>
+                    <div class="card-body">
+                        <div id="userTimelineContainer">
+                            <div class="text-center py-3">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                                <p class="mt-2">加载中...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 新增：负面情绪和不支持行为 -->
+                <div class="row g-4">
+                    <div class="col-md-6">
+                        <div class="card mb-3">
+                            <div class="card-header">检测到的负面情绪词汇</div>
+                            <div class="card-body">
+                                <div id="negativeEmotionsList">
+                                    <span class="badge bg-light text-dark">暂无数据</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card mb-3">
+                            <div class="card-header">检测到的不支持行为</div>
+                            <div class="card-body">
+                                <div id="unsupportMessagesList">
+                                    <span class="badge bg-light text-dark">暂无数据</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <a id="viewUserDetailBtn" href="#" class="btn btn-primary">查看完整用户详情</a>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 阈值滑块事件
+    const thresholdRange = document.getElementById('thresholdRange');
+    const thresholdValue = document.getElementById('thresholdValue');
+    
+    thresholdRange.addEventListener('input', function() {
+        thresholdValue.textContent = this.value;
+    });
+    
+    // 检测表单提交
+    const detectionForm = document.getElementById('detectionForm');
+    
+    detectionForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // 显示加载中，隐藏其他
+        document.getElementById('loadingIndicator').style.display = 'block';
+        document.getElementById('detectionResults').style.display = 'none';
+        document.getElementById('noResultsAlert').style.display = 'none';
+        //document.getElementById('errorAlert').style.display = 'none';
+        
+        // 获取表单数据
+        const formData = new FormData(this);
+        const data = {
+            video_id: formData.get('video_id'),
+            threshold: formData.get('threshold')
+        };
+        
+        // 发送检测请求
+        fetch('/detection/api/detect', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(result => {
+            // 隐藏加载中
+            document.getElementById('loadingIndicator').style.display = 'none';
+            
+            if (result.status === 'success') {
+                if (result.count > 0) {
+                    // 显示结果
+                    document.getElementById('detectionResults').style.display = 'block';
+                    document.getElementById('resultCount').textContent = `${result.count}个恶意用户`;
+                    
+                    // 更新结果表格
+                    updateResultTable(result.users);
+                    
+                    // 更新图表
+                    updateCharts(result.users);
+                    
+                    // 更新统计信息
+                    updateDetectionResults(result);
+                } else {
+                    // 显示无结果提示
+                    document.getElementById('noResultsAlert').style.display = 'block';
+                }
+            } else {
+                // 显示错误提示
+                document.getElementById('errorAlert').style.display = 'block';
+                document.getElementById('errorMessage').textContent = result.message || '检测失败';
+            }
+        })
+        .catch(error => {
+            // 隐藏加载中，显示错误
+            document.getElementById('loadingIndicator').style.display = 'none';
+            document.getElementById('errorAlert').style.display = 'block';
+            //document.getElementById('errorMessage').textContent = `请求错误: ${error.message}`;
+        });
+    });
+    
+    // 更新结果表格
+    function updateResultTable(users) {
+        const resultTable = document.getElementById('resultTable');
+        resultTable.innerHTML = '';
+        
+        users.forEach(user => {
+            const row = document.createElement('tr');
+            
+            // 根据恶意分数设置行样式
+            if (user.score >= 0.8) {
+                row.className = 'table-danger';
+            } else if (user.score >= 0.7) {
+                row.className = 'table-warning';
+            } else {
+                row.className = 'table-light';
+            }
+            
+            // 格式化日期
+            const latestActivity = new Date(user.latest_activity);
+            const formattedDate = latestActivity.toLocaleDateString() + ' ' + latestActivity.toLocaleTimeString();
+            
+            row.innerHTML = `
+                <td>${user.user_hash}</td>
+                <td>
+                    <div class="d-flex align-items-center">
+                        <div class="progress flex-grow-1 me-2" style="height: 10px;">
+                            <div class="progress-bar ${user.score >= 0.8 ? 'bg-danger' : 'bg-warning'}" 
+                                 role="progressbar" style="width: ${user.score * 100}%;" 
+                                 aria-valuenow="${user.score * 100}" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                        <span>${(user.score * 100).toFixed(0)}%</span>
+                    </div>
+                </td>
+                <td>${user.danmu_count}</td>
+                <td>${user.videos.length}</td>
+                <td>${formattedDate}</td>
+                
+            `;
+            
+            resultTable.appendChild(row);
+        });
+        
+        // 绑定详情按钮点击事件
+        document.querySelectorAll('.view-details-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const userHash = this.getAttribute('data-user-hash');
+                const userDetails = JSON.parse(this.getAttribute('data-user-details'));
+                showUserDetails(userHash, userDetails);
+            });
+        });
+    }
+    
+    // 显示用户详情
+    function showUserDetails(userHash, userDetails) {
+        // 设置模态框标题
+        document.getElementById('userDetailModalLabel').textContent = `用户详情: ${userHash}`;
+        
+        // 设置详情页链接
+        document.getElementById('viewUserDetailBtn').href = `/detection/user/${userHash}`;
+        
+        // 更新评分进度条
+        const totalScore = userDetails.score * 100;
+        document.getElementById('totalScoreBar').style.width = `${totalScore}%`;
+        document.getElementById('totalScoreBar').textContent = `总分: ${totalScore.toFixed(0)}%`;
+        
+        // 设置进度条颜色
+        if (totalScore >= 80) {
+            document.getElementById('totalScoreBar').className = 'progress-bar bg-danger';
+        } else if (totalScore >= 70) {
+            document.getElementById('totalScoreBar').className = 'progress-bar bg-warning';
+        } else {
+            document.getElementById('totalScoreBar').className = 'progress-bar bg-info';
+        }
+        
+        // 更新各项分数
+        const scores = userDetails.details.scores;
+        
+        document.getElementById('sensitiveScoreBar').style.width = `${scores.sensitive_score * 100 / 0.3}%`;
+        document.getElementById('sensitiveScoreBar').textContent = `敏感词: ${(scores.sensitive_score * 100).toFixed(0)}%`;
+        
+        document.getElementById('spamScoreBar').style.width = `${scores.spam_score * 100 / 0.25}%`;
+        document.getElementById('spamScoreBar').textContent = `垃圾信息: ${(scores.spam_score * 100).toFixed(0)}%`;
+        
+        document.getElementById('duplicateScoreBar').style.width = `${scores.duplicate_score * 100 / 0.15}%`;
+        document.getElementById('duplicateScoreBar').textContent = `重复内容: ${(scores.duplicate_score * 100).toFixed(0)}%`;
+        
+        document.getElementById('burstScoreBar').style.width = `${scores.burst_score * 100 / 0.15}%`;
+        document.getElementById('burstScoreBar').textContent = `爆发式发送: ${(scores.burst_score * 100).toFixed(0)}%`;
+        
+        document.getElementById('crossSpamScoreBar').style.width = `${scores.cross_spam_score * 100 / 0.15}%`;
+        document.getElementById('crossSpamScoreBar').textContent = `跨视频垃圾: ${(scores.cross_spam_score * 100).toFixed(0)}%`;
+        
+        // 新增：负面情绪和不支持行为进度条
+        document.getElementById('negativeEmotionScoreBar').style.width = `${scores.negative_emotion_score * 100 / 0.15}%`;
+        document.getElementById('unsupportScoreBar').style.width = `${scores.unsupport_score * 100 / 0.1}%`;
+        
+        // 敏感词列表
+        const sensitiveWordsList = document.getElementById('sensitiveWordsList');
+        if (userDetails.details.sensitive_words && userDetails.details.sensitive_words.length > 0) {
+            sensitiveWordsList.innerHTML = userDetails.details.sensitive_words.map(word => 
+                `<span class="badge bg-danger me-1 mb-1">${word}</span>`
+            ).join('');
+        } else {
+            sensitiveWordsList.innerHTML = '<span class="badge bg-light text-dark">未检测到敏感词</span>';
+        }
+        
+        // 垃圾信息列表
+        const spamMessagesList = document.getElementById('spamMessagesList');
+        if (userDetails.details.spam_messages && userDetails.details.spam_messages.length > 0) {
+            spamMessagesList.innerHTML = userDetails.details.spam_messages.map(msg => 
+                `<div class="alert alert-warning py-1 px-2 mb-2">${msg}</div>`
+            ).join('');
+        } else {
+            spamMessagesList.innerHTML = '<span class="badge bg-light text-dark">未检测到垃圾信息</span>';
+        }
+        
+        // 新增：负面情绪词汇列表
+        const negativeEmotionsList = document.getElementById('negativeEmotionsList');
+        if (userDetails.details.negative_emotions && userDetails.details.negative_emotions.length > 0) {
+            negativeEmotionsList.innerHTML = userDetails.details.negative_emotions.map(word => 
+                `<span class="badge bg-danger me-1 mb-1">${word}</span>`
+            ).join('');
+        } else {
+            negativeEmotionsList.innerHTML = '<span class="badge bg-light text-dark">未检测到负面情绪词汇</span>';
+        }
+        
+        // 新增：不支持行为列表
+        const unsupportMessagesList = document.getElementById('unsupportMessagesList');
+        if (userDetails.details.unsupport_messages && userDetails.details.unsupport_messages.length > 0) {
+            unsupportMessagesList.innerHTML = userDetails.details.unsupport_messages.map(msg => 
+                `<div class="alert alert-warning py-1 px-2 mb-2">${msg}</div>`
+            ).join('');
+        } else {
+            unsupportMessagesList.innerHTML = '<span class="badge bg-light text-dark">未检测到不支持行为</span>';
+        }
+        
+        // 加载用户活动时间线
+        loadUserTimeline(userHash);
+        
+        // 显示模态框
+        const modal = new bootstrap.Modal(document.getElementById('userDetailModal'));
+        modal.show();
+    }
+    
+    // 加载用户活动时间线
+    function loadUserTimeline(userHash) {
+        const timelineContainer = document.getElementById('userTimelineContainer');
+        
+        // 显示加载中
+        timelineContainer.innerHTML = `
+            <div class="text-center py-3">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2">加载中...</p>
+            </div>
+        `;
+        
+        // 获取用户活动数据
+        fetch(`/detection/api/user/${userHash}`)
+            .then(response => response.json())
+            .then(result => {
+                if (result.status === 'success' && result.data) {
+                    const activity = result.data;
+                    
+                    // 创建时间线
+                    let timelineHTML = '<div class="timeline">';
+                    
+                    activity.timeline.forEach((item, index) => {
+                        timelineHTML += `
+                            <div class="timeline-item">
+                                <div class="timeline-badge ${index % 2 === 0 ? 'bg-primary' : 'bg-info'}">
+                                    <i class="fas fa-comment"></i>
+                                </div>
+                                <div class="timeline-content">
+                                    <div class="timeline-time">${item.created_time || '未知时间'}</div>
+                                    <div class="timeline-video">视频: ${item.video_title}</div>
+                                    <div class="timeline-message">${item.content}</div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    timelineHTML += '</div>';
+                    
+                    // 更新容器
+                    timelineContainer.innerHTML = timelineHTML;
+                } else {
+                    timelineContainer.innerHTML = `
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            加载用户活动失败: ${result.message || '未知错误'}
+                        </div>
+                    `;
+                }
+            })
+            .catch(error => {
+                
+            });
+    }
+    
+    // 更新图表
+    function updateCharts(users) {
+        // 初始化图表
+        const maliciousTypeChart = echarts.init(document.getElementById('maliciousTypeChart'));
+        const userActivityChart = echarts.init(document.getElementById('userActivityChart'));
+        
+        // 恶意类型统计
+        const typeStats = {
+            sensitive: 0,
+            spam: 0,
+            duplicate: 0,
+            burst: 0,
+            cross_spam: 0
+        };
+        
+        // 用户活跃度统计
+        const activityStats = {
+            low: 0,
+            medium: 0,
+            high: 0,
+            very_high: 0
+        };
+        
+        // 统计数据
+        users.forEach(user => {
+            const scores = user.details.scores;
+            
+            // 找出主要恶意类型
+            const maxScore = Math.max(
+                scores.sensitive_score,
+                scores.spam_score,
+                scores.duplicate_score,
+                scores.burst_score,
+                scores.cross_spam_score
+            );
+            
+            if (maxScore === scores.sensitive_score) typeStats.sensitive++;
+            else if (maxScore === scores.spam_score) typeStats.spam++;
+            else if (maxScore === scores.duplicate_score) typeStats.duplicate++;
+            else if (maxScore === scores.burst_score) typeStats.burst++;
+            else if (maxScore === scores.cross_spam_score) typeStats.cross_spam++;
+            
+            // 统计活跃度
+            if (user.danmu_count < 5) activityStats.low++;
+            else if (user.danmu_count < 10) activityStats.medium++;
+            else if (user.danmu_count < 20) activityStats.high++;
+            else activityStats.very_high++;
+        });
+        
+        // 恶意类型图表配置
+        const typeOption = {
+            title: {
+                text: '恶意类型分布',
+                left: 'center'
+            },
+            tooltip: {
+                trigger: 'item',
+                formatter: '{a} <br/>{b}: {c} ({d}%)'
+            },
+            legend: {
+                orient: 'vertical',
+                left: 'left',
+                data: ['敏感词', '垃圾信息', '重复内容', '爆发式发送', '跨视频垃圾']
+            },
+            series: [
+                {
+                    name: '恶意类型',
+                    type: 'pie',
+                    radius: '70%',
+                    center: ['50%', '60%'],
+                    data: [
+                        {value: typeStats.sensitive, name: '敏感词', itemStyle: {color: '#ee6666'}},
+                        {value: typeStats.spam, name: '垃圾信息', itemStyle: {color: '#fac858'}},
+                        {value: typeStats.duplicate, name: '重复内容', itemStyle: {color: '#73c0de'}},
+                        {value: typeStats.burst, name: '爆发式发送', itemStyle: {color: '#5470c6'}},
+                        {value: typeStats.cross_spam, name: '跨视频垃圾', itemStyle: {color: '#91cc75'}}
+                    ],
+                    emphasis: {
+                        itemStyle: {
+                            shadowBlur: 10,
+                            shadowOffsetX: 0,
+                            shadowColor: 'rgba(0, 0, 0, 0.5)'
+                        }
+                    }
+                }
+            ]
+        };
+        
+        // 用户活跃度图表配置
+        const activityOption = {
+            title: {
+                text: '恶意用户活跃度',
+                left: 'center'
+            },
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: {
+                    type: 'shadow'
+                }
+            },
+            grid: {
+                left: '3%',
+                right: '4%',
+                bottom: '3%',
+                containLabel: true
+            },
+            xAxis: {
+                type: 'category',
+                data: ['低活跃(1-4条)', '中活跃(5-9条)', '高活跃(10-19条)', '超高活跃(20+条)']
+            },
+            yAxis: {
+                type: 'value'
+            },
+            series: [
+                {
+                    name: '用户数',
+                    type: 'bar',
+                    data: [
+                        {value: activityStats.low, itemStyle: {color: '#91cc75'}},
+                        {value: activityStats.medium, itemStyle: {color: '#fac858'}},
+                        {value: activityStats.high, itemStyle: {color: '#ee6666'}},
+                        {value: activityStats.very_high, itemStyle: {color: '#a90000'}}
+                    ]
+                }
+            ]
+        };
+        
+        // 设置图表
+        maliciousTypeChart.setOption(typeOption);
+        userActivityChart.setOption(activityOption);
+        
+        // 响应窗口大小变化
+        window.addEventListener('resize', function() {
+            maliciousTypeChart.resize();
+            userActivityChart.resize();
+        });
+    }
+    
+    // 在处理检测结果的函数中添加
+    function updateDetectionResults(data) {
+        // 更新统计信息
+        document.getElementById('totalUsers').textContent = data.stats.total_users;
+        document.getElementById('maliciousCount').textContent = data.stats.malicious_count;
+        document.getElementById('negativeEmotionCount').textContent = data.stats.by_type.negative_emotion;
+        document.getElementById('unsupportCount').textContent = data.stats.by_type.unsupport;
+        
+        // 更新图表数据
+        const typeData = [
+            {value: data.stats.by_type.negative_emotion, name: '负面情绪', itemStyle: {color: '#f5222d'}},
+            {value: data.stats.by_type.unsupport, name: '不支持行为', itemStyle: {color: '#faad14'}},
+            {value: data.stats.by_type.sensitive, name: '敏感词', itemStyle: {color: '#722ed1'}},
+            {value: data.stats.by_type.spam, name: '垃圾信息', itemStyle: {color: '#13c2c2'}},
+            {value: data.stats.by_type.other, name: '其他', itemStyle: {color: '#8c8c8c'}}
+        ];
+        
+        // 更新恶意类型分布图表
+        updateMaliciousTypeChart(typeData);
+        
+        // 更新分数分布图表
+        const scoreData = [
+            {value: data.stats.score_distribution['0.9-1.0'], name: '0.9-1.0', itemStyle: {color: '#a8071a'}},
+            {value: data.stats.score_distribution['0.8-0.9'], name: '0.8-0.9', itemStyle: {color: '#cf1322'}},
+            {value: data.stats.score_distribution['0.7-0.8'], name: '0.7-0.8', itemStyle: {color: '#f5222d'}},
+            {value: data.stats.score_distribution['0.6-0.7'], name: '0.6-0.7', itemStyle: {color: '#ff4d4f'}},
+            {value: data.stats.score_distribution['0.5-0.6'], name: '0.5-0.6', itemStyle: {color: '#ff7a45'}},
+            {value: data.stats.score_distribution['0.4-0.5'], name: '0.4-0.5', itemStyle: {color: '#fa8c16'}},
+            {value: data.stats.score_distribution['0.3-0.4'], name: '0.3-0.4', itemStyle: {color: '#ffc53d'}},
+            {value: data.stats.score_distribution['0.2-0.3'], name: '0.2-0.3', itemStyle: {color: '#ffec3d'}},
+            {value: data.stats.score_distribution['0.1-0.2'], name: '0.1-0.2', itemStyle: {color: '#bae637'}},
+            {value: data.stats.score_distribution['0.0-0.1'], name: '0.0-0.1', itemStyle: {color: '#73d13d'}}
+        ];
+        
+        updateScoreDistributionChart(scoreData);
+    }
+
+    // 更新恶意类型分布图表
+    function updateMaliciousTypeChart(typeData) {
+        // 如果图表尚未初始化，则初始化
+        if (!maliciousTypeChart) {
+            maliciousTypeChart = echarts.init(document.getElementById('maliciousTypeChart'));
+        }
+        
+        const typeOption = {
+            title: {
+                text: '恶意类型分布',
+                left: 'center'
+            },
+            tooltip: {
+                trigger: 'item',
+                formatter: '{a} <br/>{b}: {c} ({d}%)'
+            },
+            legend: {
+                orient: 'vertical',
+                left: 'left',
+                data: ['负面情绪', '不支持行为', '敏感词', '垃圾信息', '其他']
+            },
+            series: [
+                {
+                    name: '恶意类型',
+                    type: 'pie',
+                    radius: '70%',
+                    center: ['50%', '60%'],
+                    data: typeData,
+                    emphasis: {
+                        itemStyle: {
+                            shadowBlur: 10,
+                            shadowOffsetX: 0,
+                            shadowColor: 'rgba(0, 0, 0, 0.5)'
+                        }
+                    }
+                }
+            ]
+        };
+        
+        maliciousTypeChart.setOption(typeOption);
+    }
+
+    // 更新分数分布图表
+    function updateScoreDistributionChart(scoreData) {
+        // 如果用户活跃度图表已初始化，则复用
+        if (userActivityChart) {
+            const scoreOption = {
+                title: {
+                    text: '恶意分数分布',
+                    left: 'center'
+                },
+                tooltip: {
+                    trigger: 'item',
+                    formatter: '{a} <br/>{b}: {c} ({d}%)'
+                },
+                legend: {
+                    orient: 'vertical',
+                    left: 'left',
+                    data: scoreData.map(item => item.name)
+                },
+                series: [
+                    {
+                        name: '分数区间',
+                        type: 'pie',
+                        radius: '70%',
+                        center: ['50%', '60%'],
+                        data: scoreData,
+                        emphasis: {
+                            itemStyle: {
+                                shadowBlur: 10,
+                                shadowOffsetX: 0,
+                                shadowColor: 'rgba(0, 0, 0, 0.5)'
+                            }
+                        }
+                    }
+                ]
+            };
+            
+            userActivityChart.setOption(scoreOption);
+        }
+    }
+});
+</script>
+
+<style>
+/* 时间线样式 */
+.timeline {
+    position: relative;
+    padding: 20px 0;
+}
+
+.timeline:before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 20px;
+    width: 2px;
+    background: #e9ecef;
+}
+
+.timeline-item {
+    position: relative;
+    margin-bottom: 20px;
+}
+
+.timeline-badge {
+    position: absolute;
+    left: 10px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    text-align: center;
+    color: white;
+    line-height: 20px;
+    font-size: 12px;
+    z-index: 1;
+}
+
+.timeline-content {
+    margin-left: 40px;
+    padding: 10px 15px;
+    background: #f8f9fa;
+    border-radius: 4px;
+    position: relative;
+}
+
+.timeline-content:before {
+    content: '';
+    position: absolute;
+    left: -8px;
+    top: 10px;
+    width: 0;
+    height: 0;
+    border-top: 8px solid transparent;
+    border-bottom: 8px solid transparent;
+    border-right: 8px solid #f8f9fa;
+}
+
+.timeline-time {
+    color: #6c757d;
+    font-size: 0.8rem;
+    margin-bottom: 5px;
+}
+
+.timeline-video {
+    font-size: 0.9rem;
+    color: #495057;
+    margin-bottom: 5px;
+}
+
+.timeline-message {
+    font-weight: 500;
+}
+</style>
+{% endblock %} 

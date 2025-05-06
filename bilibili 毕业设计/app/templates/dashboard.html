@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row g-4 mb-4">
+    <div class="col-md-4">
+        <div class="card stat-card bg-primary bg-gradient text-white">
+            <div class="d-flex align-items-center">
+                <div class="flex-shrink-0">
+                    <i class="fas fa-video"></i>
+                </div>
+                <div class="flex-grow-1 ms-3">
+                    <div class="stat-value">
+                        {% if video_count is defined %}
+                            {{ "{:,}".format(video_count) }}
+                        {% else %}
+                            0
+                        {% endif %}
+                    </div>
+                    <div class="stat-label">视频总数</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card stat-card bg-success bg-gradient text-white">
+            <div class="d-flex align-items-center">
+                <div class="flex-shrink-0">
+                    <i class="fas fa-user-circle"></i>
+                </div>
+                <div class="flex-grow-1 ms-3">
+                    <div class="stat-value">
+                        {% if author_count is defined %}
+                            {{ "{:,}".format(author_count) }}
+                        {% else %}
+                            0
+                        {% endif %}
+                    </div>
+                    <div class="stat-label">UP主总数</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card stat-card bg-info bg-gradient text-white">
+            <div class="d-flex align-items-center">
+                <div class="flex-shrink-0">
+                    <i class="fas fa-play-circle"></i>
+                </div>
+                <div class="flex-grow-1 ms-3">
+                    <div class="stat-value">
+                        {% if total_plays is defined %}
+                            {{ "{:,}".format(total_plays) }}
+                        {% else %}
+                            0
+                        {% endif %}
+                    </div>
+                    <div class="stat-label">总播放量</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-white">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-chart-pie me-2"></i>视频类型分布
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="video_type_chart" style="height: 400px;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-white">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-crown me-2"></i>TOP UP主排行
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="top_authors_chart" style="height: 400px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-white">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-chart-line me-2"></i>数据趋势分析
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="trend_chart" style="height: 400px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.6.1/dist/socket.io.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+
+<script>
+// ECharts主题配置
+const theme = {
+    color: ['#FB7299', '#23ADE5', '#00A1D6', '#FF6699', '#66CCFF'],
+    backgroundColor: '#ffffff'
+};
+
+// 图表配置
+function initChart(chartId, url) {
+    const chart = echarts.init(document.getElementById(chartId));
+    loading.show('加载图表数据...');
+    
+    fetch(url)
+        .then(response => response.json())
+        .then(options => {
+            // 合并主题配置
+            const mergedOptions = {
+                ...options,
+                color: theme.color,
+                backgroundColor: theme.backgroundColor,
+                tooltip: {
+                    trigger: 'item',
+                    backgroundColor: 'rgba(0,0,0,0.7)',
+                    borderColor: 'rgba(0,0,0,0.7)',
+                    textStyle: { color: '#fff' }
+                }
+            };
+            chart.setOption(mergedOptions);
+        })
+        .catch(error => {
+            console.error('加载图表数据失败:', error);
+            showError(chartId);
+        })
+        .finally(() => {
+            loading.hide();
+        });
+
+    // 响应式调整
+    window.addEventListener('resize', () => chart.resize());
+}
+
+// 错误显示
+function showError(containerId) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = `
+        <div class="text-center text-muted py-5">
+            <i class="fas fa-exclamation-circle fa-3x mb-3"></i>
+            <p>加载数据失败，请稍后重试</p>
+        </div>
+    `;
+}
+
+// 初始化所有图表
+document.addEventListener('DOMContentLoaded', () => {
+    initChart('video_type_chart', '/api/video_type_distribution');
+    initChart('top_authors_chart', '/api/top_authors');
+    initChart('trend_chart', '/api/trend_analysis');
+});
+</script>
+{% endblock %}

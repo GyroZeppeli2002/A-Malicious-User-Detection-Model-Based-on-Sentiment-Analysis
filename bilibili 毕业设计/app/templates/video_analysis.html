@@ -1,0 +1,495 @@
+{% extends "base.html" %}
+
+{% block title %}视频数据分析{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <h1 class="mb-4">视频数据分析</h1>
+    
+    <!-- 基础统计卡片 -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h5 class="card-title">视频总数</h5>
+                    <h2 class="card-text">{{ stats.total_videos|format_number }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h5 class="card-title">总播放量</h5>
+                    <h2 class="card-text">{{ stats.total_plays|format_number }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h5 class="card-title">总弹幕数</h5>
+                    <h2 class="card-text">{{ stats.total_danmus|format_number }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <h5 class="card-title">总点赞数</h5>
+                    <h2 class="card-text">{{ stats.total_likes|format_number }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h5 class="card-title">总投币数</h5>
+                    <h2 class="card-text">{{ stats.total_coins|format_number }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-danger text-white">
+                <div class="card-body">
+                    <h5 class="card-title">总收藏数</h5>
+                    <h2 class="card-text">{{ stats.total_favorites|format_number }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 数据分布图表 -->
+    <div class="row g-4 mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">TOP 10视频数据对比</h5>
+                    <div class="btn-group">
+                        <button class="btn btn-outline-primary btn-sm" onclick="switchChartType('bar')">柱状图</button>
+                        <button class="btn btn-outline-primary btn-sm" onclick="switchChartType('line')">折线图</button>
+                        <button class="btn btn-outline-primary btn-sm" onclick="switchChartType('radar')">雷达图</button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="rankingChart" style="height: 400px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+   
+    
+    <!-- 在数据分布图表部分添加新的扇形图 -->
+    <div class="row g-4 mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">观众互动比例</h5>
+                </div>
+                <div class="card-body">
+                    <div id="interactionPieChart" style="height: 400px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 排行榜 -->
+    <div class="row g-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">播放量排行榜</h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group">
+                        {% for video in top_played %}
+                        <a href="{{ url_for('main.video_detail', bvid=video.bvid) }}" class="list-group-item list-group-item-action">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">{{ video.title }}</h6>
+                                <small>{{ video.play_count|format_number }} 播放</small>
+                            </div>
+                            <small class="text-muted">UP主: {{ video.author }}</small>
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">互动排行榜</h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group">
+                        {% for video in top_interaction %}
+                        <a href="{{ url_for('main.video_detail', bvid=video.bvid) }}" class="list-group-item list-group-item-action">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">{{ video.title }}</h6>
+                                <small>
+                                    <i class="fas fa-thumbs-up"></i> {{ video.like_count|format_number }}
+                                    <i class="fas fa-coins ms-2"></i> {{ video.coin_count|format_number }}
+                                    <i class="fas fa-star ms-2"></i> {{ video.favorite_count|format_number }}
+                                </small>
+                            </div>
+                            <small class="text-muted">UP主: {{ video.author }}</small>
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+let rankingChart;
+let currentChartType = 'bar';
+let interactionPieChart;
+
+document.addEventListener('DOMContentLoaded', function() {
+    rankingChart = echarts.init(document.getElementById('rankingChart'));
+    interactionPieChart = echarts.init(document.getElementById('interactionPieChart'));
+    loadChartData();
+    
+    // 使用静态数据而不是调用API
+    const staticData = {
+        'triple': 1000,
+        'like_favorite': 800,
+        'like_coin': 600,
+        'only_like': 2000,
+        'only_favorite': 400,
+        'only_coin': 300,
+        'no_interaction': 5000
+    };
+    
+    updateInteractionPieChart(staticData);
+});
+
+function loadChartData() {
+    // 加载数据前显示加载动画
+    rankingChart.showLoading();
+    
+    $.ajax({
+        url: "{{ url_for('main.video_stats_api') }}",
+        method: 'GET',
+        dataType: 'json',
+        success: function(response) {
+            rankingChart.hideLoading();
+            
+            if (response && response.status === 'success') {
+                // 更新排行榜图表
+                if (response.ranking_data) {
+                    updateRankingChart(response.ranking_data, currentChartType);
+                }
+                
+                // 更新关系图表
+                if (response.correlation_data) {
+                    updateCorrelationCharts(response.correlation_data);
+                }
+            } else {
+                const errorMsg = response && response.message ? response.message : '获取数据失败，请稍后重试';
+                showError(errorMsg);
+            }
+        },
+        error: function(jqXHR, textStatus, errorThrown) {
+            rankingChart.hideLoading();
+            showError('API请求失败，请检查网络连接');
+        }
+    });
+}
+
+function switchChartType(type) {
+    currentChartType = type;
+    loadChartData();
+}
+
+function showError(message) {
+    console.log('显示错误信息:', message); // 添加调试日志
+    rankingChart.setOption({
+        title: {
+            text: '数据加载失败',
+            subtext: message,
+            left: 'center',
+            top: 'center'
+        }
+    });
+}
+
+function updateRankingChart(data, type) {
+    console.log('更新图表数据:', data);
+    
+    if (!data || !data.titles || data.titles.length === 0) {
+        showError('暂无数据');
+        return;
+    }
+    
+    const colors = ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de'];
+    let option;
+    
+    if (type === 'radar') {
+        // 雷达图配置
+        option = {
+            title: {
+                text: 'TOP 10视频数据对比'
+            },
+            tooltip: {
+                trigger: 'item',
+                formatter: function(params) {
+                    return `${params.name}<br/>
+                           播放量: ${formatNumber(params.value[0])}<br/>
+                           弹幕数: ${formatNumber(params.value[1])}<br/>
+                           点赞数: ${formatNumber(params.value[2])}<br/>
+                           投币数: ${formatNumber(params.value[3])}<br/>
+                           收藏数: ${formatNumber(params.value[4])}`;
+                }
+            },
+            legend: {
+                type: 'scroll',
+                orient: 'vertical',
+                right: 0,
+                top: 'middle',
+                data: data.titles
+            },
+            radar: {
+                indicator: [
+                    { name: '播放量', max: Math.max(...data.play_count) },
+                    { name: '弹幕数', max: Math.max(...data.danmaku_count) },
+                    { name: '点赞数', max: Math.max(...data.like_count) },
+                    { name: '投币数', max: Math.max(...data.coin_count) },
+                    { name: '收藏数', max: Math.max(...data.favorite_count) }
+                ]
+            },
+            series: [{
+                type: 'radar',
+                data: data.titles.map((title, index) => ({
+                    name: title,
+                    value: [
+                        data.play_count[index],
+                        data.danmaku_count[index],
+                        data.like_count[index],
+                        data.coin_count[index],
+                        data.favorite_count[index]
+                    ]
+                }))
+            }]
+        };
+    } else {
+        // 柱状图/折线图配置
+        option = {
+            title: {
+                text: 'TOP 10视频数据对比'
+            },
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: {
+                    type: 'shadow'
+                },
+                formatter: function(params) {
+                    let result = params[0].name + '<br/>';
+                    params.forEach(param => {
+                        result += `${param.seriesName}: ${formatNumber(param.value)}<br/>`;
+                    });
+                    return result;
+                }
+            },
+            legend: {
+                data: ['播放量', '弹幕数', '点赞数', '投币数', '收藏数']
+            },
+            grid: {
+                left: '3%',
+                right: '4%',
+                bottom: '15%',
+                containLabel: true
+            },
+            xAxis: {
+                type: 'category',
+                data: data.titles,
+                axisLabel: {
+                    interval: 0,
+                    rotate: 45,
+                    textStyle: {
+                        fontSize: 12
+                    }
+                }
+            },
+            yAxis: {
+                type: 'value',
+                axisLabel: {
+                    formatter: function(value) {
+                        return formatNumber(value);
+                    }
+                }
+            },
+            series: [
+                {
+                    name: '播放量',
+                    type: type,
+                    data: data.play_count,
+                    itemStyle: { color: colors[0] }
+                },
+                {
+                    name: '弹幕数',
+                    type: type,
+                    data: data.danmaku_count,
+                    itemStyle: { color: colors[1] }
+                },
+                {
+                    name: '点赞数',
+                    type: type,
+                    data: data.like_count,
+                    itemStyle: { color: colors[2] }
+                },
+                {
+                    name: '投币数',
+                    type: type,
+                    data: data.coin_count,
+                    itemStyle: { color: colors[3] }
+                },
+                {
+                    name: '收藏数',
+                    type: type,
+                    data: data.favorite_count,
+                    itemStyle: { color: colors[4] }
+                }
+            ]
+        };
+    }
+    
+    rankingChart.setOption(option);
+}
+
+function updateInteractionPieChart(data) {
+    const option = {
+        title: {
+            text: '观众互动比例',
+            left: 'center'
+        },
+        tooltip: {
+            trigger: 'item',
+            formatter: '{a} <br/>{b}: {c} ({d}%)'
+        },
+        legend: {
+            orient: 'vertical',
+            left: 'left',
+            data: ['三连', '点赞+收藏', '点赞+投币', '仅点赞', '仅收藏', '仅投币', '白嫖']
+        },
+        series: [
+            {
+                name: '互动类型',
+                type: 'pie',
+                radius: ['40%', '70%'],
+                avoidLabelOverlap: false,
+                itemStyle: {
+                    borderRadius: 10,
+                    borderColor: '#fff',
+                    borderWidth: 2
+                },
+                label: {
+                    show: true,
+                    formatter: '{b}: {c} ({d}%)'
+                },
+                emphasis: {
+                    label: {
+                        show: true,
+                        fontSize: '20',
+                        fontWeight: 'bold'
+                    }
+                },
+                labelLine: {
+                    show: true
+                },
+                data: [
+                    {value: data.triple, name: '三连', itemStyle: {color: '#ff6b81'}},
+                    {value: data.like_favorite, name: '点赞+收藏', itemStyle: {color: '#ff9ff3'}},
+                    {value: data.like_coin, name: '点赞+投币', itemStyle: {color: '#ffa502'}},
+                    {value: data.only_like, name: '仅点赞', itemStyle: {color: '#2ed573'}},
+                    {value: data.only_favorite, name: '仅收藏', itemStyle: {color: '#1e90ff'}},
+                    {value: data.only_coin, name: '仅投币', itemStyle: {color: '#a4b0be'}},
+                    {value: data.no_interaction, name: '白嫖', itemStyle: {color: '#ced6e0'}}
+                ]
+            }
+        ]
+    };
+    
+    interactionPieChart.setOption(option);
+}
+
+// 添加关系图更新函数
+function updateCorrelationCharts(data) {
+    // 初始化图表
+    const playLikeChart = echarts.init(document.getElementById('playLikeChart'));
+    const playDanmuChart = echarts.init(document.getElementById('playDanmuChart'));
+    const playCoinChart = echarts.init(document.getElementById('playCoinChart'));
+    const playFavoriteChart = echarts.init(document.getElementById('playFavoriteChart'));
+    
+    // 通用配置
+    const getScatterOption = (title, data, xName = '播放量', yName) => ({
+        title: {
+            text: title
+        },
+        tooltip: {
+            trigger: 'item',
+            formatter: function(params) {
+                return `${xName}: ${formatNumber(params.value[0])}<br/>${yName}: ${formatNumber(params.value[1])}`;
+            }
+        },
+        xAxis: {
+            type: 'value',
+            name: xName,
+            axisLabel: {
+                formatter: value => formatNumber(value)
+            }
+        },
+        yAxis: {
+            type: 'value',
+            name: yName,
+            axisLabel: {
+                formatter: value => formatNumber(value)
+            }
+        },
+        series: [{
+            type: 'scatter',
+            data: data,
+            symbolSize: 8,
+            itemStyle: {
+                color: '#5470c6',
+                opacity: 0.6
+            }
+        }]
+    });
+    
+    // 设置各个图表
+    playLikeChart.setOption(getScatterOption('播放量与点赞数关系', data.play_like, '播放量', '点赞数'));
+    playDanmuChart.setOption(getScatterOption('播放量与弹幕数关系', data.play_danmu, '播放量', '弹幕数'));
+    playCoinChart.setOption(getScatterOption('播放量与投币数关系', data.play_coin, '播放量', '投币数'));
+    playFavoriteChart.setOption(getScatterOption('播放量与收藏数关系', data.play_favorite, '播放量', '收藏数'));
+    
+    // 添加响应式支持
+    window.addEventListener('resize', function() {
+        playLikeChart.resize();
+        playDanmuChart.resize();
+        playCoinChart.resize();
+        playFavoriteChart.resize();
+    });
+}
+
+// 确保图表响应式
+window.addEventListener('resize', function() {
+    if (rankingChart) {
+        rankingChart.resize();
+    }
+    if (interactionPieChart) {
+        interactionPieChart.resize();
+    }
+});
+
+// 格式化数字
+function formatNumber(num) {
+    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+</script>
+{% endblock %} 

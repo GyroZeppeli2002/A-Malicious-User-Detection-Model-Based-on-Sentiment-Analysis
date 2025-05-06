@@ -1,0 +1,316 @@
+{% extends "base.html" %}
+
+{% block title %}用户详情 - {{ user_hash }}{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('main.index') }}">首页</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('detection.index') }}">恶意用户检测</a></li>
+        </ol>
+    </nav>
+    
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">用户信息</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>用户标识:</strong> {{ user_hash }}</p>
+                            <p><strong>弹幕数量:</strong> {{ activity.danmu_count }}</p>
+                            <p><strong>活跃视频数:</strong> {{ activity.videos|length }}</p>
+                        </div>
+                            <div class="col-md-6">
+                                <p><strong>最早活动:</strong> 
+                                    {% if activity.timeline|length > 0 %}
+                                        {{ activity.timeline[0].created_time }}
+                                    {% else %}
+                                        未知
+                                    {% endif %}
+                                </p>
+                                <p><strong>最近活动:</strong> 
+                                    {% if activity.timeline|length > 0 %}
+                                        {{ activity.timeline[-1].created_time }}
+                                    {% else %}
+                                        未知
+                                    {% endif %}
+                                </p>
+                            </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 新增：情感和行为分析 -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">情感分析</h5>
+                </div>
+                <div class="card-body">
+                    <div id="sentimentChart" style="height: 300px;"></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">行为分析</h5>
+                </div>
+                <div class="card-body">
+                    <div id="behaviorChart" style="height: 300px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 新增：活跃时间分析 -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">活跃时间分析</h5>
+                </div>
+                <div class="card-body">
+                    <div id="activeHoursChart" style="height: 300px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row g-4 mb-4">
+        <div class="col-md-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">活跃视频</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% for video in activity.videos %}
+                        <div class="col-md-6 mb-3">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h6 class="card-title">{{ video.video_title }}</h6>
+                                    <p class="card-text text-muted">BV号: {{ video.video_bvid }}</p>
+                                    <a href="{{ url_for('main.video_detail', bvid=video.video_bvid) }}" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-video me-1"></i>查看视频
+                                    </a>
+                                    <a href="https://www.bilibili.com/video/{{ video.video_bvid }}" target="_blank" class="btn btn-sm btn-outline-secondary">
+                                        <i class="fas fa-external-link-alt me-1"></i>B站链接
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row g-4">
+        <div class="col-md-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">弹幕记录</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>内容</th>
+                                    <th>视频</th>
+                                    <th>出现时间</th>
+                                    <th>发送时间</th>
+                                    <th>情感</th>
+                                    <th>行为</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in activity.timeline %}
+                                <tr>
+                                    <td>{{ item.content }}</td>
+                                    <td>
+                                        <a href="{{ url_for('main.danmu_detail', bvid=item.video_bvid) }}" class="text-decoration-none">
+                                            {{ item.video_title }}
+                                        </a>
+                                    </td>
+                                    <td>{{ "%d:%02d"|format(item.appear_time//60 if item.appear_time else 0, item.appear_time%60 if item.appear_time else 0) }}</td>
+                                    <td>{{ item.created_time }}</td>
+                                    <td>
+                                        {% if item.sentiment.type == 'positive' %}
+                                            <span class="badge bg-success">积极 ({{ item.sentiment.score }})</span>
+                                        {% elif item.sentiment.type == 'negative' %}
+                                            <span class="badge bg-danger">消极 ({{ item.sentiment.score }})</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">中性 ({{ item.sentiment.score }})</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if item.behavior == 'support' %}
+                                            <span class="badge bg-primary">支持</span>
+                                        {% elif item.behavior == 'unsupport' %}
+                                            <span class="badge bg-warning text-dark">不支持</span>
+                                        {% elif item.behavior == 'spam' %}
+                                            <span class="badge bg-danger">垃圾信息</span>
+                                        {% else %}
+                                            <span class="badge bg-light text-dark">普通</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 情感分析图表
+    const sentimentChart = echarts.init(document.getElementById('sentimentChart'));
+    const sentimentOption = {
+        title: {
+            text: '情感分布',
+            left: 'center'
+        },
+        tooltip: {
+            trigger: 'item',
+            formatter: '{a} <br/>{b}: {c} ({d}%)'
+        },
+        legend: {
+            orient: 'vertical',
+            left: 'left',
+            data: ['积极', '中性', '消极']
+        },
+        series: [
+            {
+                name: '情感类型',
+                type: 'pie',
+                radius: '70%',
+                center: ['50%', '60%'],
+                data: [
+                    {value: {{ activity.sentiment_analysis.positive }}, name: '积极', itemStyle: {color: '#52c41a'}},
+                    {value: {{ activity.sentiment_analysis.neutral }}, name: '中性', itemStyle: {color: '#8c8c8c'}},
+                    {value: {{ activity.sentiment_analysis.negative }}, name: '消极', itemStyle: {color: '#f5222d'}}
+                ],
+                emphasis: {
+                    itemStyle: {
+                        shadowBlur: 10,
+                        shadowOffsetX: 0,
+                        shadowColor: 'rgba(0, 0, 0, 0.5)'
+                    }
+                }
+            }
+        ]
+    };
+    sentimentChart.setOption(sentimentOption);
+    
+    // 行为分析图表
+    const behaviorChart = echarts.init(document.getElementById('behaviorChart'));
+    const behaviorOption = {
+        title: {
+            text: '行为分布',
+            left: 'center'
+        },
+        tooltip: {
+            trigger: 'item',
+            formatter: '{a} <br/>{b}: {c} ({d}%)'
+        },
+        legend: {
+            orient: 'vertical',
+            left: 'left',
+            data: ['支持', '不支持', '垃圾信息', '普通']
+        },
+        series: [
+            {
+                name: '行为类型',
+                type: 'pie',
+                radius: '70%',
+                center: ['50%', '60%'],
+                data: [
+                    {value: {{ activity.behavior_analysis.support }}, name: '支持', itemStyle: {color: '#1890ff'}},
+                    {value: {{ activity.behavior_analysis.unsupport }}, name: '不支持', itemStyle: {color: '#faad14'}},
+                    {value: {{ activity.behavior_analysis.spam }}, name: '垃圾信息', itemStyle: {color: '#f5222d'}},
+                    {value: {{ activity.behavior_analysis.normal }}, name: '普通', itemStyle: {color: '#d9d9d9'}}
+                ],
+                emphasis: {
+                    itemStyle: {
+                        shadowBlur: 10,
+                        shadowOffsetX: 0,
+                        shadowColor: 'rgba(0, 0, 0, 0.5)'
+                    }
+                }
+            }
+        ]
+    };
+    behaviorChart.setOption(behaviorOption);
+    
+    // 活跃时间图表
+    const activeHoursChart = echarts.init(document.getElementById('activeHoursChart'));
+    const activeHoursOption = {
+        title: {
+            text: '24小时活跃度分布',
+            left: 'center'
+        },
+        tooltip: {
+            trigger: 'axis',
+            formatter: '{b}点: {c}条弹幕'
+        },
+        xAxis: {
+            type: 'category',
+            data: [{% for hour in range(24) %}'{{ hour }}点'{% if not loop.last %}, {% endif %}{% endfor %}]
+        },
+        yAxis: {
+            type: 'value',
+            name: '弹幕数'
+        },
+        series: [{
+            data: [
+                {% for hour in range(24) %}
+                {% set count = 0 %}
+                {% for item in activity.timeline %}
+                    {% if item.created_time and item.created_time[11:13]|int == hour %}
+                        {% set count = count + 1 %}
+                    {% endif %}
+                {% endfor %}
+                {{ count }}{% if not loop.last %}, {% endif %}
+                {% endfor %}
+            ],
+            type: 'bar',
+            itemStyle: {
+                color: function(params) {
+                    // 凌晨、早晨、下午、晚上不同颜色
+                    const hour = params.dataIndex;
+                    if (hour >= 0 && hour < 6) return '#8e44ad'; // 凌晨
+                    if (hour >= 6 && hour < 12) return '#27ae60'; // 早晨
+                    if (hour >= 12 && hour < 18) return '#f39c12'; // 下午
+                    return '#2980b9'; // 晚上
+                }
+            }
+        }]
+    };
+    activeHoursChart.setOption(activeHoursOption);
+    
+    // 响应窗口大小变化
+    window.addEventListener('resize', function() {
+        sentimentChart.resize();
+        behaviorChart.resize();
+        activeHoursChart.resize();
+    });
+});
+</script>
+{% endblock %} 

@@ -1,0 +1,945 @@
+{% extends "base.html" %}
+
+{% block title %}数据分析{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">B站视频数据分析</h1>
+    
+    <!-- 统计数据卡片 -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="card-title mb-0">视频数量</h5>
+                </div>
+                <div class="card-body">
+                    <h2 class="card-text text-center">{{ videos|length }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="card-title mb-0">总播放量</h5>
+                </div>
+                <div class="card-body">
+                    <h2 class="card-text text-center">
+                        {% if stats %}
+                            {{ (stats.play_count.mean * videos|length)|int|format_number }}
+                        {% else %}
+                            暂无数据
+                        {% endif %}
+                    </h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="card-title mb-0">平均弹幕数</h5>
+                </div>
+                <div class="card-body">
+                    <h2 class="card-text text-center">
+                        {% if stats %}
+                            {{ stats.danmaku_count.mean|int|format_number }}
+                        {% else %}
+                            暂无数据
+                        {% endif %}
+                    </h2>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 统计表格 -->
+    <div class="card mb-4">
+        <div class="card-header bg-dark text-white">
+            <h5 class="card-title mb-0">数据统计</h5>
+        </div>
+        <div class="card-body">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>指标</th>
+                        <th>平均值</th>
+                        <th>最大值</th>
+                        <th>最小值</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>播放量</td>
+                        <td>
+                            {% if stats %}
+                                {{ stats.play_count.mean|int|format_number }}
+                            {% else %}
+                                暂无数据
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if stats %}
+                                {{ stats.play_count.max|int|format_number }}
+                            {% else %}
+                                暂无数据
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if stats %}
+                                {{ stats.play_count.min|int|format_number }}
+                            {% else %}
+                                暂无数据
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>弹幕数</td>
+                        <td>
+                            {% if stats %}
+                                {{ stats.danmaku_count.mean|int|format_number }}
+                            {% else %}
+                                暂无数据
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if stats %}
+                                {{ stats.danmaku_count.max|int|format_number }}
+                            {% else %}
+                                暂无数据
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if stats %}
+                                {{ stats.danmaku_count.min|int|format_number }}
+                            {% else %}
+                                暂无数据
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>点赞数</td>
+                        <td>
+                            {% if stats %}
+                                {{ stats.like_count.mean|int|format_number }}
+                            {% else %}
+                                暂无数据
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if stats %}
+                                {{ stats.like_count.max|int|format_number }}
+                            {% else %}
+                                暂无数据
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if stats %}
+                                {{ stats.like_count.min|int|format_number }}
+                            {% else %}
+                                暂无数据
+                            {% endif %}
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <!-- 视频列表 -->
+    <div class="card">
+        <div class="card-header bg-dark text-white">
+            <h5 class="card-title mb-0">视频列表</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead>
+                        <tr>
+                            <th>BV号</th>
+                            <th>标题</th>
+                            <th>UP主</th>
+                            <th>分类</th>
+                            <th>播放量</th>
+                            <th>弹幕数</th>
+                            <th>点赞数</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for video in videos %}
+                        <tr>
+                            <td>{{ video.bvid }}</td>
+                            <td>{{ video.title }}</td>
+                            <td>{{ video.author }}</td>
+                            <td>{{ video.video_type }}</td>
+                            <td>{{ video.play_count|format_number }}</td>
+                            <td>{{ video.danmaku_count|format_number }}</td>
+                            <td>{{ video.like_count|format_number }}</td>
+                            <td>
+                                <button class="btn btn-sm btn-primary analyze-btn" data-bvid="{{ video.bvid }}" data-title="{{ video.title }}">
+                                    分析弹幕
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 弹幕分析模态框 -->
+    <div class="modal fade" id="danmuAnalysisModal" tabindex="-1" aria-labelledby="danmuAnalysisModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="danmuAnalysisModalLabel">弹幕分析</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- 添加一个选项卡 -->
+                    <ul class="nav nav-tabs mb-3" id="danmuTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="basic-tab" data-bs-toggle="tab" data-bs-target="#basic-content" type="button">基本分析</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="sentiment-tab" data-bs-toggle="tab" data-bs-target="#sentiment-content" type="button">情感分析</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="keywords-tab" data-bs-toggle="tab" data-bs-target="#keywords-content" type="button">关键词分析</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="behavior-tab" data-bs-toggle="tab" data-bs-target="#behavior-content" type="button">用户行为</button>
+                        </li>
+                    </ul>
+                    
+                    <div class="tab-content" id="danmuTabContent">
+                        <!-- 基本分析 -->
+                        <div class="tab-pane fade show active" id="basic-content" role="tabpanel">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="card mb-3">
+                                        <div class="card-header">弹幕时间分布</div>
+                                        <div class="card-body">
+                                            <div id="danmuTimeChart" style="height: 300px; width: 100%; min-height: 300px;"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card mb-3">
+                                        <div class="card-header">弹幕情感分析</div>
+                                        <div class="card-body">
+                                            <div id="danmuBasicSentimentChart" style="height: 300px;"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 情感分析 -->
+                        <div class="tab-pane fade" id="sentiment-content" role="tabpanel">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="card mb-3">
+                                        <div class="card-header">情感分析饼图</div>
+                                        <div class="card-body">
+                                            <div id="danmuSentimentChart" style="height: 300px;"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card mb-3">
+                                        <div class="card-header">情感分布详情</div>
+                                        <div class="card-body">
+                                            <div id="danmuSentimentDetailChart" style="height: 300px;"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-12" hidden>
+                                    <div class="card mb-3">
+                                        <div class="card-header">情感随时间变化</div>
+                                        <div class="card-body">
+                                            <div id="danmuSentimentTimeChart" style="height: 300px;"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 关键词分析 -->
+                        <div class="tab-pane fade" id="keywords-content" role="tabpanel">
+                            <div class="row">
+                                <div class="col-md-12">
+                                    <div class="card mb-3">
+                                        <div class="card-header"></div>
+                                        <div class="card-body">
+                                            <div id="danmuWordCloud" style="height: 400px;"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-12">
+                                    <div class="card mb-3">
+                                        <div class="card-header">关键词排行</div>
+                                        <div class="card-body">
+                                            <div id="danmuKeywordsRankChart" style="height: 300px;"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 用户行为 -->
+                        <div class="tab-pane fade" id="behavior-content" role="tabpanel">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="card mb-3">
+                                        <div class="card-header">用户活跃度</div>
+                                        <div class="card-body">
+                                            <div id="userActivityChart" style="height: 300px;"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card mb-3">
+                                        <div class="card-header">弹幕长度分布</div>
+                                        <div class="card-body">
+                                            <div id="danmuLengthChart" style="height: 300px;"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-12">
+                                    <div class="card mb-3">
+                                        <div class="card-header">互动高峰时段</div>
+                                        <div class="card-body">
+                                            <div id="peakTimeChart" style="height: 300px;"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.6.0/echarts.min.js"></script>   
+<script src="https://cdn.bootcdn.net/ajax/libs/echarts-wordcloud/2.1.0/echarts-wordcloud.min.js"></script>
+<script>
+    // 格式化数字的函数
+    function formatNumber(num) {
+        return num.toString().replace(/(\d)(?=(\d{3})+(?!\d))/g, '$1,');
+    }
+    
+    // 当点击分析弹幕按钮时
+    $('.analyze-btn').click(function() {
+        // 检查 echarts 是否加载
+        if (typeof echarts === 'undefined') {
+            alert('ECharts 库未加载，请刷新页面后重试');
+            console.error('ECharts library is not loaded');
+            return;
+        }
+        
+        const bvid = $(this).data('bvid');
+        const title = $(this).data('title');
+        
+        // 更新模态框标题
+        $('#danmuAnalysisModalLabel').text(`弹幕分析 - ${title}`);
+        
+        // 存储当前BVID到模态框元素，以便在模态框显示后使用
+        $('#danmuAnalysisModal').data('bvid', bvid);
+        
+        // 显示模态框
+        $('#danmuAnalysisModal').modal('show');
+    });
+    
+    // 移除所有绑定的shown.bs.modal事件，确保只绑定一次
+    $('#danmuAnalysisModal').off('shown.bs.modal');
+    
+    // 在模态框显示完成后加载数据 - 重新绑定
+    $('#danmuAnalysisModal').on('shown.bs.modal', function () {
+        const bvid = $(this).data('bvid');
+        if(bvid) {
+            // 清除可能存在的测试图表
+            echarts.dispose(document.getElementById('danmuTimeChart'));
+            echarts.dispose(document.getElementById('danmuBasicSentimentChart'));
+            
+            // 直接加载实际数据，不再使用测试函数
+            loadBasicDanmuStats(bvid);
+            
+            // 当用户切换到相应的选项卡时加载数据（延迟加载，提高性能）
+            $('#sentiment-tab').one('click', function() {
+                loadSentimentAnalysis(bvid);
+            });
+            
+            $('#keywords-tab').one('click', function() {
+                loadKeywordsAnalysis(bvid);
+            });
+            
+            $('#behavior-tab').one('click', function() {
+                loadBehaviorAnalysis(bvid);
+            });
+        }
+    });
+    
+    // 加载基本统计数据
+    function loadBasicDanmuStats(bvid) {
+        console.log("开始加载弹幕统计数据:", bvid);
+        
+        // 1. 加载时间分布数据
+        $.getJSON(`/api/danmu/stats/${bvid}`, function(data) {
+            console.log("弹幕统计数据已获取:", data);
+            
+            // 时间分布图表
+            if (!data || !data.time_distribution || !Array.isArray(data.time_distribution) || data.time_distribution.length === 0) {
+                $('#danmuTimeChart').html('<div class="alert alert-warning">暂无弹幕时间数据</div>');
+            } else {
+                console.log("渲染时间分布图表...");
+                // 确保容器是空的且有明确的高度
+                $('#danmuTimeChart').empty().css('height', '300px');
+                
+                try {
+                    // 确保图表容器存在
+                    if (!document.getElementById('danmuTimeChart')) {
+                        console.error("找不到danmuTimeChart容器元素");
+                        return;
+                    }
+                    
+                    // 初始化图表
+                    const timeChart = echarts.init(document.getElementById('danmuTimeChart'));
+                    
+                    // 设置图表选项
+                    const timeOption = {
+                        title: {
+                            text: '弹幕时间分布'
+                        },
+                        tooltip: {
+                            trigger: 'axis'
+                        },
+                        xAxis: {
+                            type: 'category',
+                            data: data.time_distribution.map(item => `${item.time_segment*10}-${item.time_segment*10+10}秒`)
+                        },
+                        yAxis: {
+                            type: 'value'
+                        },
+                        series: [{
+                            data: data.time_distribution.map(item => item.count),
+                            type: 'bar'
+                        }]
+                    };
+                    
+                    // 设置选项
+                    timeChart.setOption(timeOption);
+                    console.log("时间分布图表已渲染");
+                } catch (e) {
+                    console.error("时间分布图表初始化失败:", e);
+                    $('#danmuTimeChart').html(`<div class="alert alert-danger">图表渲染失败: ${e.message}</div>`);
+                }
+            }
+        }).fail(function(jqXHR, textStatus, error) {
+            console.error("时间分布API请求失败:", textStatus, error);
+            $('#danmuTimeChart').html('<div class="alert alert-danger">加载弹幕时间数据失败</div>');
+        });
+        
+        // 2. 加载情感分析数据 - 替换原来的弹幕类型分布
+        $.getJSON(`/api/danmu/sentiment/${bvid}`, function(data) {
+            console.log("弹幕情感分析数据已获取:", data);
+            
+            if (!data || !data.positive_count && !data.negative_count && !data.neutral_count) {
+                $('#danmuBasicSentimentChart').html('<div class="alert alert-warning">暂无弹幕情感分析数据</div>');
+            } else {
+                console.log("渲染情感分析图表...");
+                try {
+                    // 确保容器是空的且有明确的高度
+                    $('#danmuBasicSentimentChart').empty().css('height', '300px');
+                    
+                    // 初始化图表
+                    const sentimentChart = echarts.init(document.getElementById('danmuBasicSentimentChart'));
+                    const sentimentOption = {
+                        title: {
+                            text: '弹幕情感分析'
+                        },
+                        tooltip: {
+                            trigger: 'item',
+                            formatter: '{b}: {c} ({d}%)'
+                        },
+                        legend: {
+                            orient: 'vertical',
+                            left: 'left',
+                            data: ['积极', '消极', '中性']
+                        },
+                        series: [
+                            {
+                                type: 'pie',
+                                radius: '55%',
+                                center: ['50%', '60%'],
+                                data: [
+                                    {value: data.positive_count || 0, name: '积极', itemStyle: {color: '#91cc75'}},
+                                    {value: data.negative_count || 0, name: '消极', itemStyle: {color: '#ee6666'}},
+                                    {value: data.neutral_count || 0, name: '中性', itemStyle: {color: '#fac858'}}
+                                ],
+                                emphasis: {
+                                    itemStyle: {
+                                        shadowBlur: 10,
+                                        shadowOffsetX: 0,
+                                        shadowColor: 'rgba(0, 0, 0, 0.5)'
+                                    }
+                                }
+                            }
+                        ]
+                    };
+                    sentimentChart.setOption(sentimentOption);
+                    console.log("情感分析图表已渲染");
+                } catch (e) {
+                    console.error("情感分析图表初始化失败:", e);
+                    $('#danmuBasicSentimentChart').html(`<div class="alert alert-danger">图表渲染失败: ${e.message}</div>`);
+                }
+            }
+        }).fail(function(jqXHR, textStatus, error) {
+            console.error("情感分析API请求失败:", textStatus, error);
+            $('#danmuBasicSentimentChart').html('<div class="alert alert-danger">加载情感分析数据失败</div>');
+        });
+    }
+    
+    // 加载情感分析
+    function loadSentimentAnalysis(bvid) {
+        $.getJSON(`/api/danmu/sentiment/${bvid}`, function(data) {
+            if (!data) {
+                $('#danmuSentimentChart, #danmuSentimentDetailChart, #danmuSentimentTimeChart')
+                    .html('<div class="alert alert-warning">暂无情感分析数据</div>');
+                return;
+            }
+            
+            // 基本情感分析饼图
+            const sentimentChart = echarts.init(document.getElementById('danmuSentimentChart'));
+            const sentimentOption = {
+                
+                tooltip: {
+                    trigger: 'item'
+                },
+                legend: {
+                    orient: 'vertical',
+                    left: 'left'
+                },
+                series: [
+                    {
+                        type: 'pie',
+                        radius: '50%',
+                        data: [
+                            { value: data.positive_count || 0, name: '积极', itemStyle: {color: '#91cc75'} },
+                            { value: data.negative_count || 0, name: '消极', itemStyle: {color: '#ee6666'} },
+                            { value: data.neutral_count || 0, name: '中性', itemStyle: {color: '#fac858'} }
+                        ],
+                        emphasis: {
+                            itemStyle: {
+                                shadowBlur: 10,
+                                shadowOffsetX: 0,
+                                shadowColor: 'rgba(0, 0, 0, 0.5)'
+                            }
+                        }
+                    }
+                ]
+            };
+            sentimentChart.setOption(sentimentOption);
+            
+            // 详细情感分布
+            if (data.sentiment_distribution) {
+                const detailChart = echarts.init(document.getElementById('danmuSentimentDetailChart'));
+                const detailOption = {
+                  
+                    tooltip: {
+                        trigger: 'item'
+                    },
+                    legend: {
+                        orient: 'vertical',
+                        left: 'left'
+                    },
+                    series: [
+                        {
+                            type: 'pie',
+                            radius: '50%',
+                            data: [
+                                { value: data.sentiment_distribution.very_negative || 0, name: '非常消极', itemStyle: {color: '#c23531'} },
+                                { value: data.sentiment_distribution.negative || 0, name: '消极', itemStyle: {color: '#ee6666'} },
+                                { value: data.sentiment_distribution.neutral || 0, name: '中性', itemStyle: {color: '#fac858'} },
+                                { value: data.sentiment_distribution.positive || 0, name: '积极', itemStyle: {color: '#91cc75'} },
+                                { value: data.sentiment_distribution.very_positive || 0, name: '非常积极', itemStyle: {color: '#3ba272'} }
+                            ],
+                            emphasis: {
+                                itemStyle: {
+                                    shadowBlur: 10,
+                                    shadowOffsetX: 0,
+                                    shadowColor: 'rgba(0, 0, 0, 0.5)'
+                                }
+                            }
+                        }
+                    ]
+                };
+                detailChart.setOption(detailOption);
+            }
+            
+            // 情感随时间变化
+            if (data.time_sentiment && data.time_sentiment.length > 0) {
+                const timeChart = echarts.init(document.getElementById('danmuSentimentTimeChart'));
+                const timeOption = {
+                    title: {
+                        text: '情感随时间变化'
+                    },
+                    tooltip: {
+                        trigger: 'axis',
+                        formatter: function(params) {
+                            params = params[0];
+                            const sentiment = params.value;
+                            let sentiment_text = '中性';
+                            if (sentiment > 0.7) sentiment_text = '非常积极';
+                            else if (sentiment > 0.55) sentiment_text = '积极';
+                            else if (sentiment < 0.3) sentiment_text = '非常消极';
+                            else if (sentiment < 0.45) sentiment_text = '消极';
+                            
+                            return `${params.name}秒<br/>情感值: ${sentiment} (${sentiment_text})<br/>弹幕数: ${params.data.count}`;
+                        }
+                    },
+                    xAxis: {
+                        type: 'category',
+                        data: data.time_sentiment.map(item => `${item.time}`)
+                    },
+                    yAxis: {
+                        type: 'value',
+                        min: 0,
+                        max: 1,
+                        axisLabel: {
+                            formatter: function(value) {
+                                if (value <= 0.3) return '消极';
+                                else if (value <= 0.45) return '较消极';
+                                else if (value <= 0.55) return '中性';
+                                else if (value <= 0.7) return '较积极';
+                                else return '积极';
+                            }
+                        }
+                    },
+                    visualMap: {
+                        show: false,
+                        pieces: [
+                            {lte: 0.3, color: '#c23531'},
+                            {gt: 0.3, lte: 0.45, color: '#ee6666'},
+                            {gt: 0.45, lte: 0.55, color: '#fac858'},
+                            {gt: 0.55, lte: 0.7, color: '#91cc75'},
+                            {gt: 0.7, color: '#3ba272'}
+                        ]
+                    },
+                    series: [{
+                        name: '情感值',
+                        type: 'line',
+                        smooth: true,
+                        data: data.time_sentiment.map(item => ({
+                            value: item.sentiment,
+                            count: item.count
+                        }))
+                    }]
+                };
+                timeChart.setOption(timeOption);
+            }
+        });
+    }
+    
+   // 完全重写关键词分析函数
+function loadKeywordsAnalysis(bvid) {
+    console.log("开始加载关键词分析数据:", bvid);
+    
+    // 清空容器并显示加载中提示
+    $('#danmuWordCloud').html('<div class="text-center"><div class="spinner-border text-primary" role="status"></div><p>加载中...</p></div>');
+    $('#danmuKeywordsRankChart').html('<div class="text-center"><div class="spinner-border text-primary" role="status"></div><p>加载中...</p></div>');
+    
+    $.getJSON(`/api/danmu/keywords/${bvid}`, function(data) {
+        console.log("获取到的关键词数据:", data);
+        
+        if (!data || !Array.isArray(data) || data.length === 0) {
+            $('#danmuWordCloud, #danmuKeywordsRankChart').html('<div class="alert alert-warning">暂无关键词数据</div>');
+            return;
+        }
+        
+        // 确保容器是空的
+        $('#danmuWordCloud').empty();
+        
+        // 确保容器有足够的高度
+        $('#danmuWordCloud').css('height', '400px');
+        
+        // 检查echarts和wordcloud插件是否正确加载
+        if (typeof echarts === 'undefined') {
+            console.error("ECharts 库未加载");
+            $('#danmuWordCloud').html('<div class="alert alert-danger">ECharts 库未加载</div>');
+            return;
+        }
+        
+        if (!echarts.getMap || !echarts.registerMap) {
+            console.error("ECharts 版本不兼容");
+            $('#danmuWordCloud').html('<div class="alert alert-danger">ECharts 版本不兼容</div>');
+            return;
+        }
+        
+        try {
+            // 初始化词云图
+            const wordCloudChart = echarts.init(document.getElementById('danmuWordCloud'));
+            
+            // 准备词云数据
+            const wordCloudData = data.map(function(item) {
+                return {
+                    name: item.word,
+                    value: item.count || 1
+                };
+            });
+            
+            console.log("词云数据:", wordCloudData);
+            
+            // 词云图配置
+            const wordCloudOption = {
+                series: [{
+                    type: 'wordCloud',
+                    shape: 'circle',
+                    left: 'center',
+                    top: 'center',
+                    width: '70%',
+                    height: '80%',
+                    sizeRange: [12, 60],
+                    rotationRange: [-90, 90],
+                    rotationStep: 45,
+                    gridSize: 8,
+                    drawOutOfBound: false,
+                    textStyle: {
+                        fontFamily: 'sans-serif',
+                        fontWeight: 'bold',
+                        color: function() {
+                            return 'rgb(' + [
+                                Math.round(Math.random() * 160),
+                                Math.round(Math.random() * 160),
+                                Math.round(Math.random() * 160)
+                            ].join(',') + ')';
+                        }
+                    },
+                    emphasis: {
+                        textStyle: {
+                            shadowBlur: 10,
+                            shadowColor: '#333'
+                        }
+                    },
+                    data: wordCloudData
+                }]
+            };
+            
+            // 设置词云图配置
+            wordCloudChart.setOption(wordCloudOption);
+            console.log("词云图配置已设置");
+            
+            // 监听窗口大小变化，调整图表大小
+            window.addEventListener('resize', function() {
+                wordCloudChart.resize();
+            });
+            
+            // 关键词排行图
+            $('#danmuKeywordsRankChart').empty();
+            $('#danmuKeywordsRankChart').css('height', '300px');
+            
+            const keywordsRankChart = echarts.init(document.getElementById('danmuKeywordsRankChart'));
+            const top15Keywords = data.slice(0, 15);
+            
+            const keywordsRankOption = {
+                title: {
+                    text: '热门关键词TOP15'
+                },
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: {
+                        type: 'shadow'
+                    }
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'value',
+                    boundaryGap: [0, 0.01]
+                },
+                yAxis: {
+                    type: 'category',
+                    data: top15Keywords.map(item => item.word).reverse()
+                },
+                series: [
+                    {
+                        name: '出现次数',
+                        type: 'bar',
+                        data: top15Keywords.map(item => item.count).reverse()
+                    }
+                ]
+            };
+            
+            keywordsRankChart.setOption(keywordsRankOption);
+            console.log("关键词排行图配置已设置");
+            
+            // 监听窗口大小变化，调整图表大小
+            window.addEventListener('resize', function() {
+                keywordsRankChart.resize();
+            });
+            
+        } catch (error) {
+            console.error("词云图渲染错误:", error);
+            $('#danmuWordCloud').html('<div class="alert alert-danger">词云图渲染失败: ' + error.message + '</div>');
+        }
+    }).fail(function(jqXHR, textStatus, error) {
+        console.error("获取关键词数据失败:", textStatus, error);
+        $('#danmuWordCloud, #danmuKeywordsRankChart').html(
+            '<div class="alert alert-danger">加载关键词数据失败: ' + error + '</div>'
+        );
+    });
+}
+    // 加载用户行为分析
+    function loadBehaviorAnalysis(bvid) {
+        $.getJSON(`/api/danmu/behavior/${bvid}`, function(data) {
+            if (!data) {
+                $('#userActivityChart, #danmuLengthChart, #peakTimeChart').html('<div class="alert alert-warning">暂无用户行为数据</div>');
+                return;
+            }
+            
+            // 用户活跃度图表
+            if (data.user_activity) {
+                const userActivityChart = echarts.init(document.getElementById('userActivityChart'));
+                const userActivityOption = {
+                    title: {
+                        text: '用户活跃度分布'
+                    },
+                    tooltip: {
+                        trigger: 'item'
+                    },
+                    legend: {
+                        orient: 'vertical',
+                        left: 'left'
+                    },
+                    series: [
+                        {
+                            type: 'pie',
+                            radius: '50%',
+                            data: [
+                                { value: data.user_activity.single_comment, name: '偶尔参与(1条)' },
+                                { value: data.user_activity.active, name: '活跃(2-5条)' },
+                                { value: data.user_activity.very_active, name: '非常活跃(6-10条)' },
+                                { value: data.user_activity.super_active, name: '超级活跃(10+条)' }
+                            ],
+                            emphasis: {
+                                itemStyle: {
+                                    shadowBlur: 10,
+                                    shadowOffsetX: 0,
+                                    shadowColor: 'rgba(0, 0, 0, 0.5)'
+                                }
+                            }
+                        }
+                    ]
+                };
+                userActivityChart.setOption(userActivityOption);
+            }
+            
+            // 弹幕长度分布图表
+            if (data.length_distribution) {
+                const lengthChart = echarts.init(document.getElementById('danmuLengthChart'));
+                const lengthOption = {
+                    title: {
+                        text: '弹幕长度分布'
+                    },
+                    tooltip: {
+                        trigger: 'item'
+                    },
+                    legend: {
+                        orient: 'vertical',
+                        left: 'left'
+                    },
+                    series: [
+                        {
+                            type: 'pie',
+                            radius: '50%',
+                            data: [
+                                { value: data.length_distribution.very_short, name: '极短(1-5字)' },
+                                { value: data.length_distribution.short, name: '短(6-10字)' },
+                                { value: data.length_distribution.medium, name: '中等(11-20字)' },
+                                { value: data.length_distribution.long, name: '长(20+字)' }
+                            ],
+                            emphasis: {
+                                itemStyle: {
+                                    shadowBlur: 10,
+                                    shadowOffsetX: 0,
+                                    shadowColor: 'rgba(0, 0, 0, 0.5)'
+                                }
+                            }
+                        }
+                    ]
+                };
+                lengthChart.setOption(lengthOption);
+            }
+            
+            // 互动高峰时段图表
+            if (data.peak_times && data.peak_times.length > 0) {
+                const peakTimeChart = echarts.init(document.getElementById('peakTimeChart'));
+                const peakTimeOption = {
+                    title: {
+                        text: '互动高峰时段'
+                    },
+                    tooltip: {
+                        trigger: 'axis'
+                    },
+                    xAxis: {
+                        type: 'category',
+                        data: data.peak_times.map(item => `${item.hour}点`)
+                    },
+                    yAxis: {
+                        type: 'value'
+                    },
+                    series: [{
+                        data: data.peak_times.map(item => item.count),
+                        type: 'bar',
+                        itemStyle: {
+                            color: function(params) {
+                                // 凌晨、早晨、下午、晚上不同颜色
+                                const hour = data.peak_times[params.dataIndex].hour;
+                                if (hour >= 0 && hour < 6) return '#8e44ad'; // 凌晨
+                                if (hour >= 6 && hour < 12) return '#27ae60'; // 早晨
+                                if (hour >= 12 && hour < 18) return '#f39c12'; // 下午
+                                return '#2980b9'; // 晚上
+                            }
+                        }
+                    }]
+                };
+                peakTimeChart.setOption(peakTimeOption);
+            }
+        });
+    }
+    
+    // 当模态框关闭时，清除所有图表
+    $('#danmuAnalysisModal').on('hidden.bs.modal', function () {
+        // 基本分析选项卡
+        echarts.dispose(document.getElementById('danmuTimeChart'));
+        echarts.dispose(document.getElementById('danmuBasicSentimentChart'));
+        
+        // 情感分析选项卡
+        echarts.dispose(document.getElementById('danmuSentimentChart'));
+        echarts.dispose(document.getElementById('danmuSentimentDetailChart'));
+        echarts.dispose(document.getElementById('danmuSentimentTimeChart'));
+        
+        // 关键词分析选项卡
+        echarts.dispose(document.getElementById('danmuWordCloud'));
+        echarts.dispose(document.getElementById('danmuKeywordsRankChart'));
+        
+        // 用户行为选项卡
+        echarts.dispose(document.getElementById('userActivityChart'));
+        echarts.dispose(document.getElementById('danmuLengthChart'));
+        echarts.dispose(document.getElementById('peakTimeChart'));
+    });
+</script>
+{% endblock %}

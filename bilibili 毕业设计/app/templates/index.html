@@ -1,0 +1,420 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row align-items-center mb-4">
+    <div class="col-lg-6">
+        <h1 class="display-4 fw-bold mb-3">B站数据分析系统</h1>
+        <p class="lead text-muted mb-4">深入分析哔哩哔哩平台数据，发现视频创作趋势和用户行为特征</p>
+        <div class="d-grid gap-2 d-md-flex mb-4">
+            <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary btn-lg px-4 me-md-2">
+                <i class="fas fa-chart-bar me-2"></i>查看数据看板
+            </a>
+            <button class="btn btn-outline-secondary btn-lg px-4" id="startCrawl">
+                <i class="fas fa-spider me-2"></i>
+            </button>
+        </div>
+    </div>
+    <div class="col-lg-6 d-none d-lg-block">
+        <img src="/static/images/banner.png" class="img-fluid" alt="数据分析插图">
+    </div>
+</div>
+
+<!-- 爬取选项模态框 -->
+<div class="modal fade" id="crawlOptionsModal" tabindex="-1" aria-labelledby="crawlOptionsModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="crawlOptionsModalLabel">爬取选项</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="crawlOptionsForm">
+                    <div class="mb-3">
+                        <label class="form-label">爬取类型</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="crawlType" id="typePopular" value="popular" checked>
+                            <label class="form-check-label" for="typePopular">
+                                热门视频
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="crawlType" id="typeDanmu" value="danmu">
+                            <label class="form-check-label" for="typeDanmu">
+                                指定视频弹幕
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="crawlType" id="typeBatchDanmu" value="batch_danmu">
+                            <label class="form-check-label" for="typeBatchDanmu">
+                                批量爬取弹幕
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3" id="limitGroup">
+                        <label for="limitInput" class="form-label">爬取数量</label>
+                        <input type="number" class="form-control" id="limitInput" name="limit" value="10" min="1" max="50">
+                        <div class="form-text">设置要爬取的视频数量 (1-50)</div>
+                    </div>
+                    
+                    <div class="mb-3" id="bvidGroup" style="display: none;">
+                        <label for="bvidInput" class="form-label">视频BV号</label>
+                        <input type="text" class="form-control" id="bvidInput" name="bvid" placeholder="例如: BV1xx411c7mD">
+                        <div class="form-text">输入B站视频的BV号</div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="startCrawlBtn">开始爬取</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 爬取进度显示 -->
+<div id="crawlProgress" style="display: none;" class="mb-5">
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-primary text-white">
+            <div class="d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-spider me-2"></i>数据爬取进度</h5>
+                <span id="progressPercent" class="badge bg-light text-dark">0%</span>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="progress mb-3" style="height: 20px;">
+                <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+            </div>
+            <div class="d-flex justify-content-between text-muted mb-3">
+                <span id="currentCount">已爬取: 0 条</span>
+                <span id="totalCount">总计: 0 条</span>
+            </div>
+            
+            <div class="card mb-3">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0">当前爬取</h6>
+                </div>
+                <div class="card-body">
+                    <div id="currentItem">等待开始...</div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">爬取日志</h6>
+                    <button class="btn btn-sm btn-outline-secondary" id="clearLog">清空</button>
+                </div>
+                <div class="card-body p-0">
+                    <div id="crawlLog" class="log-container p-3" style="max-height: 200px; overflow-y: auto;">
+                        <div class="log-entry p-2 mb-1 log-secondary">
+                            <small class="text-muted">准备就绪</small>
+                            <div>准备就绪，等待开始爬取...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 爬取结果显示 -->
+<div id="crawlResults" style="display: none;" class="mb-5">
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-success text-white">
+            <h5 class="mb-0"><i class="fas fa-check-circle me-2"></i>爬取完成</h5>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-success">
+                <h5 class="alert-heading">爬取成功!</h5>
+                <p id="resultsSummary">成功爬取数据。</p>
+                <hr>
+                <p class="mb-0">您可以在数据看板中查看分析结果。</p>
+            </div>
+            
+            <div class="text-center">
+                <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary">
+                    <i class="fas fa-chart-bar me-2"></i>查看数据看板
+                </a>
+                <button class="btn btn-outline-secondary ms-2" id="newCrawlBtn">
+                    <i class="fas fa-spider me-2"></i>新的爬取任务
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 py-4">
+    <div class="col-md-4">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body text-center">
+                <div class="feature-icon bg-primary bg-gradient text-white rounded-circle mb-3">
+                    <i class="fas fa-database fa-2x p-3"></i>
+                </div>
+                <h3 class="card-title h5 mb-3">数据采集</h3>
+                <p class="card-text text-muted">
+                    通过B站API和网页爬虫，获取视频、UP主、弹幕等多维度数据，构建完整的数据分析基础。
+                </p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body text-center">
+                <div class="feature-icon bg-success bg-gradient text-white rounded-circle mb-3">
+                    <i class="fas fa-chart-pie fa-2x p-3"></i>
+                </div>
+                <h3 class="card-title h5 mb-3">数据分析</h3>
+                <p class="card-text text-muted">
+                    运用Python进行数据清洗、统计分析和特征提取，挖掘数据中的潜在价值和规律。
+                </p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100 shadow-sm">
+            <div class="card-body text-center">
+                <div class="feature-icon bg-info bg-gradient text-white rounded-circle mb-3">
+                    <i class="fas fa-chart-line fa-2x p-3"></i>
+                </div>
+                <h3 class="card-title h5 mb-3">可视化展示</h3>
+                <p class="card-text text-muted">
+                    基于ECharts实现直观的数据可视化，帮助您更好地理解和展示分析结果。
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<a href="{{ url_for('main.danmu_list_view') }}" class="btn btn-outline-primary" hidden>查看弹幕数据</a>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // 爬取选项切换
+    document.addEventListener('DOMContentLoaded', function() {
+        const typeRadios = document.querySelectorAll('input[name="crawlType"]');
+        const limitGroup = document.getElementById('limitGroup');
+        const bvidGroup = document.getElementById('bvidGroup');
+        
+        typeRadios.forEach(radio => {
+            radio.addEventListener('change', function() {
+                if (this.value === 'danmu') {
+                    limitGroup.style.display = 'none';
+                    bvidGroup.style.display = 'block';
+                } else {
+                    limitGroup.style.display = 'block';
+                    bvidGroup.style.display = 'none';
+                }
+            });
+        });
+        
+        // 打开爬取选项模态框
+        document.getElementById('startCrawl').addEventListener('click', function() {
+            const modal = new bootstrap.Modal(document.getElementById('crawlOptionsModal'));
+            modal.show();
+        });
+        
+        // 开始爬取按钮点击事件
+        document.getElementById('startCrawlBtn').addEventListener('click', function() {
+            const form = document.getElementById('crawlOptionsForm');
+            const formData = new FormData(form);
+            const crawlType = formData.get('crawlType');
+            const limit = formData.get('limit');
+            const bvid = formData.get('bvid');
+            
+            // 关闭模态框
+            bootstrap.Modal.getInstance(document.getElementById('crawlOptionsModal')).hide();
+            
+            // 显示进度条
+            document.getElementById('crawlProgress').style.display = 'block';
+            document.getElementById('crawlResults').style.display = 'none';
+            
+            // 添加开始日志
+            addLogEntry(`开始${crawlType === 'popular' ? '热门视频' : crawlType === 'danmu' ? '弹幕' : '批量弹幕'}爬取任务`, 'info');
+            
+            // 发送爬取请求
+            startCrawlTask(crawlType, limit, bvid);
+        });
+        
+        // 清空日志按钮
+        document.getElementById('clearLog').addEventListener('click', function() {
+            document.getElementById('crawlLog').innerHTML = '';
+            addLogEntry('日志已清空', 'secondary');
+        });
+        
+        // 新的爬取任务按钮
+        document.getElementById('newCrawlBtn').addEventListener('click', function() {
+            document.getElementById('crawlResults').style.display = 'none';
+            const modal = new bootstrap.Modal(document.getElementById('crawlOptionsModal'));
+            modal.show();
+        });
+    });
+    
+    // 添加日志条目
+    function addLogEntry(message, type = 'info') {
+        const logContainer = document.getElementById('crawlLog');
+        const now = new Date();
+        const timeString = now.toLocaleTimeString();
+        
+        const logEntry = document.createElement('div');
+        logEntry.className = `log-entry p-2 mb-1 log-${type}`;
+        logEntry.innerHTML = `
+            <small class="text-muted">${timeString}</small>
+            <div>${message}</div>
+        `;
+        
+        logContainer.appendChild(logEntry);
+        logContainer.scrollTop = logContainer.scrollHeight;
+    }
+    
+    // 开始爬取任务
+    function startCrawlTask(type, limit, bvid) {
+        // 准备请求数据
+        const requestData = {
+            type: type
+        };
+        
+        if (type === 'popular' || type === 'batch_danmu') {
+            requestData.limit = parseInt(limit);
+        } else if (type === 'danmu') {
+            requestData.bvid = bvid;
+        }
+        
+        // 发送请求
+        fetch('/api/crawl/start', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                addLogEntry(`爬虫任务已启动: ${data.task_id}`, 'success');
+                
+                // 开始轮询进度
+                pollCrawlProgress(data.task_id);
+            } else {
+                addLogEntry(`启动爬虫任务失败: ${data.message}`, 'danger');
+            }
+        })
+        .catch(error => {
+            addLogEntry(`请求错误: ${error.message}`, 'danger');
+        });
+    }
+    
+    // 轮询爬取进度
+    function pollCrawlProgress(taskId) {
+        const progressInterval = setInterval(() => {
+            fetch(`/api/crawl/progress/${taskId}`)
+            .then(response => response.json())
+            .then(data => {
+                updateProgressUI(data);
+                
+                // 如果任务完成或失败，停止轮询
+                if (data.status === 'completed' || data.status === 'failed') {
+                    clearInterval(progressInterval);
+                    
+                    if (data.status === 'completed') {
+                        showCompletedUI(data);
+                    } else {
+                        addLogEntry(`爬取任务失败: ${data.message}`, 'danger');
+                    }
+                }
+            })
+            .catch(error => {
+                addLogEntry(`获取进度失败: ${error.message}`, 'danger');
+            });
+        }, 1000); // 每秒轮询一次
+    }
+    
+    // 更新进度UI
+    function updateProgressUI(data) {
+        // 更新进度条
+        const percent = data.percent || 0;
+        document.getElementById('progressBar').style.width = `${percent}%`;
+        document.getElementById('progressBar').textContent = `${percent}%`;
+        document.getElementById('progressPercent').textContent = `${percent}%`;
+        
+        // 更新计数
+        if (data.current !== undefined && data.total !== undefined) {
+            document.getElementById('currentCount').textContent = `已爬取: ${data.current} 条`;
+            document.getElementById('totalCount').textContent = `总计: ${data.total} 条`;
+        }
+        
+        // 更新当前项
+        if (data.current_item) {
+            document.getElementById('currentItem').innerHTML = `
+                <div class="d-flex align-items-center">
+                    <div class="spinner-border spinner-border-sm text-primary me-2" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <div>
+                        <strong>${data.current_item.title || '未知视频'}</strong>
+                        ${data.current_item.author ? `<div class="text-muted small">UP主: ${data.current_item.author}</div>` : ''}
+                    </div>
+                </div>
+            `;
+        }
+        
+        // 添加日志
+        if (data.log && data.log.length > 0) {
+            data.log.forEach(entry => {
+                addLogEntry(entry.message, entry.type || 'info');
+            });
+        }
+    }
+    
+    // 显示完成UI
+    function showCompletedUI(data) {
+        // 隐藏进度条，显示结果
+        document.getElementById('crawlProgress').style.display = 'none';
+        document.getElementById('crawlResults').style.display = 'block';
+        
+        // 更新结果摘要
+        let summary = '';
+        if (data.type === 'popular') {
+            summary = `成功爬取 ${data.count} 个热门视频及其作者信息。`;
+        } else if (data.type === 'danmu') {
+            summary = `成功爬取视频《${data.video_title || '未知视频'}》的 ${data.count} 条弹幕。`;
+        } else if (data.type === 'batch_danmu') {
+            summary = `成功批量爬取 ${data.video_count} 个视频的 ${data.count} 条弹幕。`;
+        }
+        
+        document.getElementById('resultsSummary').textContent = summary;
+    }
+</script>
+
+<style>
+.log-container {
+    background-color: #f8f9fa;
+    border-radius: 0.25rem;
+    border: 1px solid #e9ecef;
+}
+
+.log-entry {
+    border-left: 3px solid #e9ecef;
+    background-color: #ffffff;
+}
+
+.log-info {
+    border-left-color: #17a2b8;
+}
+
+.log-success {
+    border-left-color: #28a745;
+    background-color: #f0fff4;
+}
+
+.log-danger {
+    border-left-color: #dc3545;
+    background-color: #fff5f5;
+}
+
+.log-secondary {
+    border-left-color: #6c757d;
+    background-color: #f8f9fa;
+}
+</style>
+{% endblock %}
